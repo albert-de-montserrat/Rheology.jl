@@ -2,35 +2,8 @@ using Test
 using StaticArrays
 using ForwardDiff
 
-abstract type AbstractRheology end
-
-struct LinearViscosity{T} <: AbstractRheology
-    η::T
-end
-
-struct PowerLawViscosity{T,I} <: AbstractRheology
-    η::T
-    n::I # DO NOT PROMOTE TO FP BY DEFAULT
-end
-
-struct Elasticity{T} <: AbstractRheology
-    G::T
-    K::T
-end
-
-## NOT NEEDED FOR NOW
-# state_variables(::LinearViscosity) = (:stress,)
-# state_variables(::PowerLawViscosity) = (:stress,)
-# state_variables(::Elasticity) = :stress, :pressure
-# state_variables(::AbstractRheology) = error("Rheology not defined")
-
-@inline state_functions(::LinearViscosity) = (compute_shear_strain,)
-@inline state_functions(::PowerLawViscosity) = (compute_shear_strain,)
-@inline state_functions(::Elasticity) = compute_shear_strain, compute_volumetric_strain
-@inline state_functions(::AbstractRheology) = error("Rheology not defined")
-# handle tuples
-@inline state_functions(r::NTuple{N, AbstractRheology}) where N = state_functions(first(r))..., state_functions(Base.tail(r))...
-@inline state_functions(::Tuple{})= ()
+include("rheology_types.jl")
+include("state_functions.jl")
 
 # compute_shear_strain methods
 @inline compute_shear_strain(r::LinearViscosity; τ = 0, kwargs...) = τ / (2 * r.η)
@@ -72,6 +45,7 @@ eval_state_function(fn::F, r::AbstractRheology, args::NamedTuple) where F = fn(r
     end
 end
 
+# this is beautiful, gets compiled away
 @generated function flatten_repeated_functions(funs::NTuple{N, Any}) where {N}
     quote
         @inline 
@@ -97,24 +71,28 @@ end
 # elemental rheologies
 viscous  = LinearViscosity(1e20)
 powerlaw = PowerLawViscosity(1e30, 2)
-elastic  = Elasticity(1e10, Inf)
+elastic  = Elasticity(1e10, 1e12) # im making up numbers
+drucker  = DruckerPrager(1e6, 30, 10)
 # define args
-args = (; τ = 1e9, P = 1e9)
+dt = 1e10
+args = (; τ = 1e9, P = 1e9, λ = 0)
 args2 = SA[values(args)...]
 # composite rheology
-composite = viscous, elastic, powerlaw
+composite = viscous, elastic, powerlaw, drucker
 # pull state functions
 statefuns = get_unique_state_functions(composite)
 
-@code_llvm get_unique_state_functions0(composite)
-@code_llvm get_unique_state_functions(composite)
-
-
 # local jacobians
-J1 = ForwardDiff.jacobian( x-> eval_state_functions(statefuns, composite[1], (; τ = x[1], P = x[2])), args2)
-J2 = ForwardDiff.jacobian( x-> eval_state_functions(statefuns, composite[2], (; τ = x[1], P = x[2])), args2)
-J3 = ForwardDiff.jacobian( x-> eval_state_functions(statefuns, composite[3], (; τ = x[1], P = x[2])), args2)
+J1 = ForwardDiff.jacobian( x-> eval_state_functions(statefuns, composite[1], (; τ = x[1], P = x[2], λ = x[3], dt = dt)), args2)
+J2 = ForwardDiff.jacobian( x-> eval_state_functions(statefuns, composite[2], (; τ = x[1], P = x[2], λ = x[3], dt = dt)), args2)
+J3 = ForwardDiff.jacobian( x-> eval_state_functions(statefuns, composite[3], (; τ = x[1], P = x[2], λ = x[3], dt = dt)), args2)
+J4 = ForwardDiff.jacobian( x-> eval_state_functions(statefuns, composite[4], (; τ = x[1], P = x[2], λ = x[3], dt = dt)), args2)
 
+# compute the global jacobian
+J = @SMatrix zeros(length(statefuns), length(statefuns))
+for c in composite
+    J += ForwardDiff.jacobian( x-> eval_state_functions(statefuns, c, (; τ = x[1], P = x[2], λ = x[3], dt = dt)), args2)
+end
 
 ### Tests
 # viscous  = LinearViscosity(1e20)
