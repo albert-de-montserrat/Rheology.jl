@@ -67,32 +67,59 @@ function get_unique_state_functions(composite::NTuple{N, AbstractRheology}) wher
     return flatten_repeated_functions(funs)
 end
 
-### Scripting
+
 # elemental rheologies
-viscous  = LinearViscosity(1e20)
-powerlaw = PowerLawViscosity(1e30, 2)
-elastic  = Elasticity(1e10, 1e12) # im making up numbers
-drucker  = DruckerPrager(1e6, 30, 10)
-# define args
-dt = 1e10
-args = (; τ = 1e9, P = 1e9, λ = 0)
-args2 = SA[values(args)...]
-# composite rheology
-composite = viscous, elastic, powerlaw, drucker
-# pull state functions
-statefuns = get_unique_state_functions(composite)
+function main()
+    viscous  = LinearViscosity(1e20)
+    powerlaw = PowerLawViscosity(1e30, 2)
+    elastic  = Elasticity(1e10, 1e12) # im making up numbers
+    drucker  = DruckerPrager(1e6, 30, 10)
+    # define args
+    dt = 1e10
+    args = (; τ = 1e9, P = 1e9, λ = 0e0)
+    args2 = SA[values(args)...]
+    # composite rheology
+    composite = viscous, elastic, powerlaw, drucker
+    # pull state functions
+    statefuns = get_unique_state_functions(composite)
 
-# local jacobians
-J1 = ForwardDiff.jacobian( x-> eval_state_functions(statefuns, composite[1], (; τ = x[1], P = x[2], λ = x[3], dt = dt)), args2)
-J2 = ForwardDiff.jacobian( x-> eval_state_functions(statefuns, composite[2], (; τ = x[1], P = x[2], λ = x[3], dt = dt)), args2)
-J3 = ForwardDiff.jacobian( x-> eval_state_functions(statefuns, composite[3], (; τ = x[1], P = x[2], λ = x[3], dt = dt)), args2)
-J4 = ForwardDiff.jacobian( x-> eval_state_functions(statefuns, composite[4], (; τ = x[1], P = x[2], λ = x[3], dt = dt)), args2)
-
-# compute the global jacobian
-J = @SMatrix zeros(length(statefuns), length(statefuns))
-for c in composite
-    J += ForwardDiff.jacobian( x-> eval_state_functions(statefuns, c, (; τ = x[1], P = x[2], λ = x[3], dt = dt)), args2)
+    # compute the global jacobian
+    J = @SMatrix zeros(length(statefuns), length(statefuns))
+    Base.@nexprs 4 i -> begin
+        J += ForwardDiff.jacobian( x-> eval_state_functions(statefuns, composite[i], (; τ = x[1], P = x[2], λ = x[3], dt = dt)), args2)
+    end
+    J
 end
+
+main()
+
+
+# ### Scripting
+# # elemental rheologies
+# viscous  = LinearViscosity(1e20)
+# powerlaw = PowerLawViscosity(1e30, 2)
+# elastic  = Elasticity(1e10, 1e12) # im making up numbers
+# drucker  = DruckerPrager(1e6, 30, 10)
+# # define args
+# dt = 1e10
+# args = (; τ = 1e9, P = 1e9, λ = 0)
+# args2 = SA[values(args)...]
+# # composite rheology
+# composite = viscous, elastic, powerlaw, drucker
+# # pull state functions
+# statefuns = get_unique_state_functions(composite)
+
+# # local jacobians
+# J1 = ForwardDiff.jacobian( x-> eval_state_functions(statefuns, composite[1], (; τ = x[1], P = x[2], λ = x[3], dt = dt)), args2)
+# J2 = ForwardDiff.jacobian( x-> eval_state_functions(statefuns, composite[2], (; τ = x[1], P = x[2], λ = x[3], dt = dt)), args2)
+# J3 = ForwardDiff.jacobian( x-> eval_state_functions(statefuns, composite[3], (; τ = x[1], P = x[2], λ = x[3], dt = dt)), args2)
+# J4 = ForwardDiff.jacobian( x-> eval_state_functions(statefuns, composite[4], (; τ = x[1], P = x[2], λ = x[3], dt = dt)), args2)
+
+# # compute the global jacobian
+# J = @SMatrix zeros(length(statefuns), length(statefuns))
+# for c in composite
+#     J += ForwardDiff.jacobian( x-> eval_state_functions(statefuns, c, (; τ = x[1], P = x[2], λ = x[3], dt = dt)), args2)
+# end
 
 ### Tests
 # viscous  = LinearViscosity(1e20)
