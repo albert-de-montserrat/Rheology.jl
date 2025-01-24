@@ -69,15 +69,16 @@ end
 
 
 # elemental rheologies
-function main()
+# function main()
     viscous  = LinearViscosity(1e20)
     powerlaw = PowerLawViscosity(1e30, 2)
     elastic  = Elasticity(1e10, 1e12) # im making up numbers
     drucker  = DruckerPrager(1e6, 30, 10)
     # define args
     dt = 1e10
-    args = (; τ = 1e9, P = 1e9, λ = 0e0)
+    args = (; τ = 1e9, P = 1e9, λ = 0e0) # we solve for this
     args2 = SA[values(args)...]
+    vars = (; ε = 1e-15, θ = 1e-20, λ = 0e0)
     # composite rheology
     composite = viscous, elastic, powerlaw, drucker
     # pull state functions
@@ -89,9 +90,9 @@ function main()
         J += ForwardDiff.jacobian( x-> eval_state_functions(statefuns, composite[i], (; τ = x[1], P = x[2], λ = x[3], dt = dt)), args2)
     end
     J
-end
+# end
 
-main()
+# main()
 
 
 # ### Scripting
