@@ -23,12 +23,25 @@ end
 
 DruckerPrager(args...) = DruckerPrager(promote(args...)...)
 
+## METHODS FOR SERIES MODELS
+
 # table of methods needed per rheology
-@inline state_functions(::LinearViscosity) = (compute_shear_strain,)
-@inline state_functions(::PowerLawViscosity) = (compute_shear_strain,)
-@inline state_functions(::Elasticity) = compute_shear_strain, compute_volumetric_strain
-@inline state_functions(::DruckerPrager) = compute_shear_strain, compute_volumetric_strain, compute_lambda
-@inline state_functions(::AbstractRheology) = error("Rheology not defined")
+@inline series_state_functions(::LinearViscosity) = (compute_shear_strain,)
+@inline series_state_functions(::PowerLawViscosity) = (compute_shear_strain,)
+@inline series_state_functions(::Elasticity) = compute_shear_strain, compute_volumetric_strain
+@inline series_state_functions(::DruckerPrager) = compute_shear_strain, compute_volumetric_strain, compute_lambda
+@inline series_state_functions(::AbstractRheology) = error("Rheology not defined")
 # handle tuples
-@inline state_functions(r::NTuple{N, AbstractRheology}) where N = state_functions(first(r))..., state_functions(Base.tail(r))...
-@inline state_functions(::Tuple{})= ()
+@inline series_state_functions(r::NTuple{N, AbstractRheology}) where N = series_state_functions(first(r))..., series_state_functions(Base.tail(r))...
+@inline series_state_functions(::Tuple{})= ()
+
+## METHODS FOR PARALLEL MODELS
+# table of methods needed per rheology
+@inline parallel_state_functions(::LinearViscosity) = (compute_stress,)
+@inline parallel_state_functions(::PowerLawViscosity) = (compute_stress,)
+@inline parallel_state_functions(::Elasticity) = compute_stress, compute_pressure
+@inline parallel_state_functions(::DruckerPrager) = compute_stress, compute_pressure, compute_lambda
+@inline parallel_state_functions(::AbstractRheology) = error("Rheology not defined")
+# handle tuples
+@inline parallel_state_functions(r::NTuple{N, AbstractRheology}) where N = parallel_state_functions(first(r))..., parallel_state_functions(Base.tail(r))...
+@inline parallel_state_functions(::Tuple{})= ()

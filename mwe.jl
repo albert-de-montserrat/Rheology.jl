@@ -61,15 +61,32 @@ function get_unique_state_functions0(composite::NTuple{N, AbstractRheology}) whe
     return peelfuns(funs, funs_bool)
 end
 
-function get_unique_state_functions(composite::NTuple{N, AbstractRheology}) where N
-    funs  = state_functions(composite)
+# function get_unique_state_functions(composite::NTuple{N, AbstractRheology}) where N
+#     funs  = state_functions(composite)
+#     # get unique state functions
+#     return flatten_repeated_functions(funs)
+# end
+
+function get_unique_state_functions(composite::NTuple{N, AbstractRheology}, model::Symbol) where N
+    funs = if model === :series
+        get_unique_state_functions(composite, series_state_functions)
+    elseif model === :parallel
+        get_unique_state_functions(composite, parallel_state_functions)
+    else
+        error("Model not defined. Accepted models are :series or :parallel")
+    end
+    return funs
+end
+
+function get_unique_state_functions(composite::NTuple{N, AbstractRheology}, state_fn) where N
+    funs  = state_fn(composite)
     # get unique state functions
     return flatten_repeated_functions(funs)
 end
 
 
 # elemental rheologies
-# function main()
+function main_series()
     viscous  = LinearViscosity(1e20)
     powerlaw = PowerLawViscosity(1e30, 2)
     elastic  = Elasticity(1e10, 1e12) # im making up numbers
@@ -82,7 +99,7 @@ end
     # composite rheology
     composite = viscous, elastic, powerlaw, drucker
     # pull state functions
-    statefuns = get_unique_state_functions(composite)
+    statefuns = get_unique_state_functions(composite, :series)
 
     # compute the global jacobian
     J = @SMatrix zeros(length(statefuns), length(statefuns))
@@ -90,9 +107,33 @@ end
         J += ForwardDiff.jacobian( x-> eval_state_functions(statefuns, composite[i], (; τ = x[1], P = x[2], λ = x[3], dt = dt)), args2)
     end
     J
-# end
+end
 
-# main()
+function main_parallel()
+    viscous  = LinearViscosity(1e20)
+    powerlaw = PowerLawViscosity(1e30, 2)
+    elastic  = Elasticity(1e10, 1e12) # im making up numbers
+    drucker  = DruckerPrager(1e6, 30, 10)
+    # define args
+    dt = 1e10
+    args = (; ε = 1e-15, θ = 1e-19) # we solve for this
+    args2 = SA[values(args)...]
+    # composite rheology
+    composite = viscous, elastic
+    # pull state functions
+    statefuns = get_unique_state_functions(composite, :parallel)
+    J1 = ForwardDiff.jacobian( x-> eval_state_functions(statefuns, composite[1], (; ε = x[1], θ = x[2], dt = dt)), args2)
+    J2 = ForwardDiff.jacobian( x-> eval_state_functions(statefuns, composite[2], (; ε = x[1], θ = x[2], dt = dt)), args2)
+    
+    J  = J1 .+ J2
+    
+    @test J[1,1] == 2 * viscous.η + 2 * elastic.G * dt
+    @test J[2,2] == elastic.K * dt
+
+    return J
+end
+
+main_parallel()
 
 
 # ### Scripting
