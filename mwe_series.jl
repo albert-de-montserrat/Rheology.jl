@@ -4,17 +4,8 @@ using ForwardDiff
 
 include("rheology_types.jl")
 include("state_functions.jl")
+include("kwargs.jl")
 # include("composite.jl") # not functional yet
-
-
-@inline function augment_args(args, Δx)
-    k = keys(args)
-    vals = MVector(values(args))
-    for i in eachindex(Δx)
-        vals[i] += Δx[i]
-    end
-    return (; zip(k, vals)...)
-end
 
 @generated function bt_line_search(Δx::SVector{N}, J, R, statefuns, composite, args, vars; α=1.0, ρ=0.5, c=1e-4, α_min=1e-8) where N
     quote
@@ -26,8 +17,9 @@ end
             @inline
             perturbed_R += eval_state_functions(statefuns, composite[i], perturbed_args)
         end
-
-        while norm(perturbed_R) > norm(R + (c * α * (J * Δx)))
+        
+        while sqrt(sum(R.^2)) > sqrt(sum((R + (c * α * (J * Δx))).^2))
+            # while norm(perturbed_R) > norm(R + (c * α * (J * Δx)))
             α *= ρ
             if α < α_min
                 α = α_min
@@ -78,24 +70,66 @@ function main_series(args; max_iter=100, tol=1e-10, verbose=false)
         end
     
         Δx    = -J \ R
-        α     = bt_line_search(Δx, J, R, statefuns, composite, args, vars)
-        x    += α * Δx
+        # α     = bt_line_search(Δx, J, R, statefuns, composite, args, vars)
+        x    += Δx #* α
         err   = norm(Δx/abs(x) for (Δx,x) in zip(Δx, x))
 
         iter > max_iter &&  break
 
         # update args, this should be generalized
-        args = (; τ=x[1])
+        # args = (; τ=x[1])
+        args = update_args(args, x)
 
         if verbose; println("iter: $iter, x: $x, err: $err, α = $α"); end
 
     end
     
 end
+@b main_series($args; verbose = false)
 
-# args = (; τ = 1e2) # we solve for this, initial guess
-# main_series(args; verbose = false)
-# @b main_series($args; verbose = false)
+args = (; τ = 1e2) # we solve for this, initial guess
+main_series(args; verbose = true)
+
+function main_series2(args; max_iter=100, tol=1e-10, verbose=false)
+    viscous  = LinearViscosity(5e19)
+    powerlaw = PowerLawViscosity(5e19, 3)
+    x    = SA[values(args)...]
+    vars = (; ε = 1e-15) # input variables
+    # composite rheology
+    composite = viscous, powerlaw
+    # pull state functions
+    statefuns = get_unique_state_functions(composite, :series)
+
+    ## START NEWTON RAPHSON SOLVER
+    err, iter = 1e3, 0
+
+    while err > tol
+        iter += 1
+
+        J = compute_jacobian(x, composite, statefuns, args)
+        R = compute_residual(composite, statefuns, vars, args)
+
+        Δx    = -J \ R
+        α     = bt_line_search(Δx, J, R, statefuns, composite, args, vars)
+        x    += Δx # * α
+        err  = sqrt(sum( (Δx ./ abs.(x)).^2))
+        iter > max_iter &&  break
+
+        # update args, this should be generalized
+        args = update_args(args, x)
+
+        if verbose; println("iter: $iter, x: $x, err: $err, α = $α"); end
+
+    end
+    
+end
+@b main_series2($args; verbose = false)
+
+args = (; τ = 1e2) # we solve for this, initial guess
+main_series2(args; verbose = true)
+ProfileCanvas.@profview for i in 1:10000000 main_series2(args; verbose = false) end 
+@b main_series2($args; verbose = false)
+
 
 function main_series_viscoelastic(args; max_iter=100, tol=1e-10, verbose=false)
     viscous  = LinearViscosity(5e19)
@@ -135,7 +169,7 @@ function main_series_viscoelastic(args; max_iter=100, tol=1e-10, verbose=false)
         iter > max_iter &&  break
 
         # update args, this should be generalized
-        args = (; τ=x[1], P = x[2], dt = dt)
+        args = update_args(args, x)
 
         if verbose; println("iter: $iter, x: $x, err: $err, α = $α"); end
 
