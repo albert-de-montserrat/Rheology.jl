@@ -12,9 +12,9 @@ include("matrices.jl")
     quote
         perturbed_args = augment_args(args, α * Δx)
         perturbed_R    = -SA[values(vars)...]
-
+        
         # this will be put into a function (harcoded for now)
-        Base.@nexprs $N i -> begin
+        Base.@nexprs $Nstate i -> begin
             @inline
             perturbed_R += eval_state_functions(statefuns, composite[i], perturbed_args)
         end
@@ -54,6 +54,7 @@ function main_series(args; max_iter=100, tol=1e-10, verbose=false)
     vars = (; ε = 1e-15) # input variables
     # composite rheology
     composite = viscous, powerlaw
+    
     # pull state functions
     statefuns = get_unique_state_functions(composite, :series)
 
@@ -181,5 +182,5 @@ function main_series_viscoelastic(args; max_iter=100, tol=1e-10, verbose=false)
 end
 
 args = (; τ = 1e2, P = 1e6, dt = 1e10) # we solve for this, initial guess
-main_series_viscoelastic(args; verbose = true)
+#main_series_viscoelastic(args; verbose = true)
 
