@@ -55,8 +55,8 @@ function main_series(args; max_iter=100, tol=1e-10, verbose=false)
         end
     
         Δx    = -J \ R
-        # α     = bt_line_search(Δx, J, R, statefuns, composite, args, vars)
-        x    += Δx #* α
+        α     = bt_line_search(Δx, J, R, statefuns, composite, args, vars)
+        x    += Δx * α
         err   = norm(Δx/abs(x) for (Δx,x) in zip(Δx, x))
 
         iter > max_iter &&  break
@@ -165,3 +165,6 @@ end
 args = (; τ = 1e2, P = 1e6, dt = 1e10) # we solve for this, initial guess
 main_series_viscoelastic(args; verbose = true)
 
+x = @SMatrix rand(3,3);
+@b norm($x)
+@b sqrt(sum($x.^2))
