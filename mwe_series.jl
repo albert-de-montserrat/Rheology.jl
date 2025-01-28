@@ -19,7 +19,36 @@ function bt_line_search(Δx, J, R, statefuns, composite::NTuple{N, Any}, args, v
             break
         end
         perturbed_args = augment_args(args, α * Δx)
+<<<<<<< HEAD
         perturbed_R = compute_residual(composite, statefuns, vars, perturbed_args) 
+=======
+        perturbed_R    = -SA[values(vars)...]
+        
+        # this will be put into a function (harcoded for now)
+        Base.@nexprs $Nstate i -> begin
+            @inline
+            perturbed_R += eval_state_functions(statefuns, composite[i], perturbed_args)
+        end
+        
+        while sqrt(sum(R.^2)) > sqrt(sum((R + (c * α * (J * Δx))).^2))
+            # while norm(perturbed_R) > norm(R + (c * α * (J * Δx)))
+            α *= ρ
+            if α < α_min
+                α = α_min
+                break
+            end
+
+            perturbed_args = augment_args(args, α * Δx)
+            perturbed_R    = -SA[values(vars)...]
+        
+            # this will be put into a function (harcoded for now)
+            Base.@nexprs $N i -> begin
+                @inline
+                perturbed_R += eval_state_functions(statefuns, composite[i], perturbed_args)
+            end
+        end
+        return N
+>>>>>>> 0be88081cd2b33d22eaf8806e51acc839c559092
     end
     return α
 end
@@ -38,6 +67,7 @@ function main_series(args; max_iter=100, tol=1e-10, verbose=false)
     vars = (; ε = 1e-15) # input variables
     # composite rheology
     composite = viscous, powerlaw
+    
     # pull state functions
     statefuns = get_unique_state_functions(composite, :series)
 
@@ -163,6 +193,11 @@ main_series2(args; verbose = true)
     
 # end
 
+<<<<<<< HEAD
 # args = (; τ = 1e2, P = 1e6, dt = 1e10) # we solve for this, initial guess
 # main_series_viscoelastic(args; verbose = true)
+=======
+args = (; τ = 1e2, P = 1e6, dt = 1e10) # we solve for this, initial guess
+#main_series_viscoelastic(args; verbose = true)
+>>>>>>> 0be88081cd2b33d22eaf8806e51acc839c559092
 
