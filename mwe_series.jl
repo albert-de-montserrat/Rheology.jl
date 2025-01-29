@@ -59,6 +59,7 @@ function main_series(vars, composite, args; max_iter=100, tol=1e-10, verbose=fal
         if verbose; println("iter: $iter, x: $x, err: $err, α = $α"); end
 
     end
+    return update_args(args_diff, x)
 end
 
 viscous  = LinearViscosity(5e19)
