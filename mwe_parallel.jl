@@ -56,20 +56,21 @@ function main_parallel(vars, composite, args; max_iter=100, tol=1e-10, verbose=f
         if verbose; println("iter: $iter, x: $x, err: $err, α = $α"); end
 
     end
-    
+
+    return update_args(args_diff, x)
 end
 
 # define rheologies
 viscous  = LinearViscosity(5e19)
 powerlaw = PowerLawViscosity(5e19, 3)
-# elastic  = Elasticity(1e10, 1e12) # im making up numbers
+elastic  = Elasticity(1e10, 1e12) # im making up numbers
 # drucker  = DruckerPrager(1e6, 30, 10)
 # define args
-# dt = 1e10
+dt = 1e10
 # composite rheology
-composite = viscous, powerlaw #, elastic
+composite = viscous, powerlaw, elastic
 
-args_guess = (; ε = 1e-15) # we solve for this, initial guess
-input_vars = (; τ = 1e2, ) # input variables
+args = (; ε = 1e-15, θ = 1e-15, dt=dt) # we solve for this, initial guess
+input_vars = (; τ = 1e2, P =1e6) # input variables
 
-main_parallel(input_vars, composite, args_guess; verbose = true)
+main_parallel(input_vars, composite, args; verbose = true)
