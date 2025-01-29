@@ -63,9 +63,9 @@ function main_series(vars, composite, args; max_iter=100, tol=1e-10, verbose=fal
 end
 
 viscous  = LinearViscosity(5e19)
-powerlaw = PowerLawViscosity(5e19, 3)
+# powerlaw = PowerLawViscosity(5e19, 3)
 # elastic  = Elasticity(1e10, 1e12) # im making up numbers
-# drucker  = DruckerPrager(1e6, 30, 10)
+drucker  = DruckerPrager(1e6, 30, 10)
 # define args
 # dt = 1e10
 # args = (; τ = 1e9, P = 1e9, λ = 0e0) # we solve for this

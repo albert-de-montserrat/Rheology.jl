@@ -29,3 +29,38 @@ function _compute_jacobian(x::SVector{N}, compositeᵢ, statefuns, args_diff::Na
     return ForwardDiff.jacobian(x -> f(x), x)
 end
 
+
+_compute_jacobian(x, composite[1], statefuns,  args_diff, args_nondiff)
+# _compute_jacobian(x, composite[2], statefuns,  args_diff, args_nondiff)
+
+
+# ForwardDiff.derivative( x-> compute_stress(composite[1], (;ε = 1.0e-15, θ = 1.0e-15, τ_pl = x, P_pl = 1, λ = 0)), args_diff.τ_pl)
+# ForwardDiff.derivative( x-> compute_pressure(composite[1], (;ε = 1.0e-15, θ = 1.0e-15, τ_pl = x, P_pl = 1, λ = 0)), args_diff.τ_pl)
+# ForwardDiff.derivative( x-> compute_lambda(composite[1], (;ε = 1.0e-15, θ = 1.0e-15, τ_pl = x, P_pl = 1, λ = 0)), args_diff.τ_pl)
+# ForwardDiff.derivative( x-> compute_plastic_strain_rate(composite[1], (;ε = 1.0e-15, θ = 1.0e-15, τ_pl = x, P_pl = 1, λ = 0)), args_diff.τ_pl)
+# ForwardDiff.derivative( x-> compute_volumetric_plastic_strain_rate(composite[1], (;ε = 1.0e-15, θ = 1.0e-15, τ_pl = x, P_pl = 1, λ = 0)), args_diff.τ_pl)
+
+
+# ForwardDiff.derivative( x-> compute_stress(composite[1], (;ε = x, θ = 1.0e-15, τ_pl = 1, P_pl = 1, λ = 0)), args_diff.ε)
+# ForwardDiff.derivative( x-> compute_pressure(composite[1], (;ε = x, θ = 1.0e-15, τ_pl = 1, P_pl = 1, λ = 0)), args_diff.ε)
+# ForwardDiff.derivative( x-> compute_lambda(composite[1], (;ε = x, θ = 1.0e-15, τ_pl = 1, P_pl = 1, λ = 0)), args_diff.ε)
+# ForwardDiff.derivative( x-> compute_plastic_strain_rate(composite[1], (;ε = x, θ = 1.0e-15, τ_pl = 1, P_pl = 1, λ = 0)), args_diff.ε)
+# ForwardDiff.derivative( x-> compute_volumetric_plastic_strain_rate(composite[1], (;ε = x, θ = 1.0e-15, τ_pl = 1, P_pl = 1, λ = 0)), args_diff.ε)
+
+# ForwardDiff.derivative( x-> compute_stress(composite[1], (;ε = 1e-15, θ = x, τ_pl = 1, P_pl = 1, λ = 0)), args_diff.θ)
+# ForwardDiff.derivative( x-> compute_pressure(composite[1], (;ε = 1e-15, θ = x, τ_pl = 1, P_pl = 1, λ = 0)), args_diff.θ)
+# ForwardDiff.derivative( x-> compute_lambda(composite[1], (;ε = 1e-15, θ = x, τ_pl = 1, P_pl = 1, λ = 0)), args_diff.θ)
+# ForwardDiff.derivative( x-> compute_plastic_strain_rate(composite[1], (;ε = 1e-15, θ = x, τ_pl = 1, P_pl = 1, λ = 0)), args_diff.θ)
+# ForwardDiff.derivative( x-> compute_volumetric_plastic_strain_rate(composite[1], (;ε = 1e-15, θ = x, τ_pl = 1, P_pl = 1, λ = 0)), args_diff.θ)
+
+# ForwardDiff.derivative( x-> compute_stress(composite[1], (;ε = 1e-15, θ = 1e-15, τ_pl = 1, P_pl = x, λ = 0)), args_diff.P_pl)
+# ForwardDiff.derivative( x-> compute_pressure(composite[1], (;ε = 1e-15, θ = 1e-15, τ_pl = 1, P_pl = x, λ = 0)), args_diff.P_pl)
+# ForwardDiff.derivative( x-> compute_lambda(composite[1], (;ε = 1e-15, θ = 1e-15, τ_pl = 1, P_pl = x, λ = 0)), args_diff.P_pl)
+# ForwardDiff.derivative( x-> compute_plastic_strain_rate(composite[1], (;ε = 1e-15, θ = 1e-15, τ_pl = 1, P_pl = x, λ = 0)), args_diff.P_pl)
+# ForwardDiff.derivative( x-> compute_volumetric_plastic_strain_rate(composite[1], (;ε = 1e-15, θ = 1e-15, τ_pl = 1, P_pl = x, λ = 0)), args_diff.P_pl)
+
+# ForwardDiff.derivative( x-> compute_stress(composite[1], (;ε = 1e-15, θ = 1e-15, τ_pl = 1, P_pl = 1, λ = x)), args_diff.λ)
+# ForwardDiff.derivative( x-> compute_pressure(composite[1], (;ε = 1e-15, θ = 1e-15, τ_pl = 1, P_pl = 1, λ = x)), args_diff.λ)
+# ForwardDiff.derivative( x-> compute_lambda(composite[1], (;ε = 1e-15, θ = 1e-15, τ_pl = 1, P_pl = 1, λ = x)), args_diff.λ)
+# ForwardDiff.derivative( x-> compute_plastic_strain_rate(composite[1], (;ε = 1e-15, θ = 1e-15, τ_pl = 1, P_pl = 1, λ = x)), args_diff.λ)
+# ForwardDiff.derivative( x-> compute_volumetric_plastic_strain_rate(composite[1], (;ε = 1e-15, θ = 1e-15, τ_pl = 1, P_pl = 1, λ = x)), args_diff.λ)

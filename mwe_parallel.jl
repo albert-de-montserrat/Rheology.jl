@@ -24,10 +24,10 @@ function bt_line_search(Δx, J, R, statefuns, composite::NTuple{N, Any}, args, v
     return α
 end
 
-function main_parallel(vars, composite, args; max_iter=100, tol=1e-10, verbose=false)
+function main(vars, composite, args; mode = :series, max_iter=100, tol=1e-10, verbose=false)
 
     # pull state functions
-    statefuns = get_unique_state_functions(composite, :parallel)
+    statefuns = get_unique_state_functions(composite, mode)
 
     # split args into differentiable and not differentiable
     args_diff, args_nondiff = split_args(args, statefuns)
@@ -35,7 +35,9 @@ function main_parallel(vars, composite, args; max_iter=100, tol=1e-10, verbose=f
     x = SA[values(args_diff)...]
 
     ## START NEWTON RAPHSON SOLVER
+    max_iter = 100
     err, iter = 1e3, 0
+    tol = 1e-8
 
     while err > tol
         iter += 1
@@ -61,16 +63,17 @@ function main_parallel(vars, composite, args; max_iter=100, tol=1e-10, verbose=f
 end
 
 # define rheologies
-viscous  = LinearViscosity(5e19)
+viscous  = LinearViscosity(1e6)
 powerlaw = PowerLawViscosity(5e19, 3)
 elastic  = Elasticity(1e10, 1e12) # im making up numbers
-# drucker  = DruckerPrager(1e6, 30, 10)
+drucker  = DruckerPrager(1e6, 30, 10) # C, ϕ, ψ
 # define args
-dt = 1e10
+# dt = 1e10
 # composite rheology
-composite = viscous, powerlaw, elastic
+composite =  (drucker,) #, powerlaw, elastic
+mode = :parallel
 
-args = (; ε = 1e-15, θ = 1e-15, dt=dt) # we solve for this, initial guess
-input_vars = (; τ = 1e2, P =1e6) # input variables
+args = (; ε = 1e-15, θ = 1e-15, τ_pl = 1e9, P_pl = 1e6, λ = 0) # we solve for this, initial guess
+vars=input_vars = (; τ = 1e9, P = 1e6, ε = 0, θ = 0, λ = 0) # input variables
 
-main_parallel(input_vars, composite, args; verbose = true)
+main(input_vars, composite, args; mode=mode, verbose = true)
