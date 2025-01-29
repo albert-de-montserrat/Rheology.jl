@@ -24,22 +24,17 @@ function bt_line_search(Δx, J, R, statefuns, composite::NTuple{N, Any}, args, v
     return α
 end
 
-function main_series(args; max_iter=100, tol=1e-10, verbose=false)
-    viscous  = LinearViscosity(5e19)
-    powerlaw = PowerLawViscosity(5e19, 3)
-    # elastic  = Elasticity(1e10, 1e12) # im making up numbers
-    # drucker  = DruckerPrager(1e6, 30, 10)
-    # define args
-    # dt = 1e10
-    # args = (; τ = 1e9, P = 1e9, λ = 0e0) # we solve for this
-    # args = (; τ = 1e2) # we solve for this, initial guess
-    x    = SA[values(args)...]
-    vars = (; ε = 1e-15) # input variables
-    # composite rheology
-    composite = viscous, powerlaw
+function main_series(vars, composite, args; max_iter=100, tol=1e-10, verbose=false)
+    
     # pull state functions
     statefuns = get_unique_state_functions(composite, :series)
 
+    # split args into differentiable and not differentiable
+    args_diff, args_nondiff = split_args(args, statefuns)
+
+    # rhs of the system of eqs, initial guess
+    x = SA[values(args_diff)...]
+    
     ## START NEWTON RAPHSON SOLVER
     err, iter = 1e3, 0
 
@@ -47,12 +42,8 @@ function main_series(args; max_iter=100, tol=1e-10, verbose=false)
         iter += 1
 
         # compute the global jacobian and residual
-        R = -SA[values(vars)...]
-        J = @SMatrix zeros(length(statefuns), length(statefuns))
-        Base.@nexprs 2 i -> begin # this will be put into a function, hardcoded for now
-            J += ForwardDiff.jacobian( x-> eval_state_functions(statefuns, composite[i], (; τ = x[1])), x)
-            R += eval_state_functions(statefuns, composite[i], args)
-        end
+        J = compute_jacobian(x, composite, statefuns, args_diff, args_nondiff)
+        R = compute_residual(composite, statefuns, vars, args)
     
         Δx    = -J \ R
         α     = bt_line_search(Δx, J, R, statefuns, composite, args, vars)
@@ -70,10 +61,22 @@ function main_series(args; max_iter=100, tol=1e-10, verbose=false)
     end
 end
 
+viscous  = LinearViscosity(5e19)
+powerlaw = PowerLawViscosity(5e19, 3)
+# elastic  = Elasticity(1e10, 1e12) # im making up numbers
+# drucker  = DruckerPrager(1e6, 30, 10)
+# define args
+# dt = 1e10
+# args = (; τ = 1e9, P = 1e9, λ = 0e0) # we solve for this
+# args = (; τ = 1e2) # we solve for this, initial guess
+vars = (; ε = 1e-15) # input variables
+# composite rheology
+composite = viscous, powerlaw
+
 # @b main_series($args; verbose = false)
 
-# args = (; τ = 1e2) # we solve for this, initial guess
-# main_series(args; verbose = true)
+args = (; τ = 1e2) # we solve for this, initial guess
+main_series(vars, composite, args; verbose = true)
 
 function main_series2(args; max_iter=100, tol=1e-10, verbose=false)
     viscous  = LinearViscosity(5e19)
@@ -115,7 +118,7 @@ end
 
 args = (; τ = 1e2) # we solve for this, initial guess
 main_series2(args; verbose = true)
-@b main_series2($args; verbose = false)
+#@b main_series2($args; verbose = false)
 
 function main_series_viscoelastic(args; max_iter=100, tol=1e-10, verbose=false)
 
@@ -166,5 +169,5 @@ args = (; τ = 1e2, P = 1e6, dt = 1e10) # we solve for this, initial guess
 main_series_viscoelastic(args; verbose = true)
 
 x = @SMatrix rand(3,3);
-@b norm($x)
-@b sqrt(sum($x.^2))
+#@b norm($x)
+#@b sqrt(sum($x.^2))
