@@ -26,10 +26,10 @@ DruckerPrager(args...) = DruckerPrager(promote(args...)...)
 ## METHODS FOR SERIES MODELS
 
 # table of methods needed per rheology
-@inline series_state_functions(::LinearViscosity) = (compute_shear_strain,)
-@inline series_state_functions(::PowerLawViscosity) = (compute_shear_strain,)
-@inline series_state_functions(::Elasticity) = compute_shear_strain, compute_volumetric_strain
-@inline series_state_functions(::DruckerPrager) = compute_shear_strain, compute_volumetric_strain, compute_lambda
+@inline series_state_functions(::LinearViscosity) = (compute_shear_strain_rate,)
+@inline series_state_functions(::PowerLawViscosity) = (compute_shear_strain_rate,)
+@inline series_state_functions(::Elasticity) = compute_shear_strain_rate, compute_volumetric_strain_rate
+@inline series_state_functions(::DruckerPrager) = compute_shear_strain_rate, compute_volumetric_strain_rate, compute_lambda
 @inline series_state_functions(::AbstractRheology) = error("Rheology not defined")
 # handle tuples
 @inline series_state_functions(r::NTuple{N, AbstractRheology}) where N = series_state_functions(first(r))..., series_state_functions(Base.tail(r))...
@@ -40,7 +40,7 @@ DruckerPrager(args...) = DruckerPrager(promote(args...)...)
 @inline parallel_state_functions(::LinearViscosity) = (compute_stress,)
 @inline parallel_state_functions(::PowerLawViscosity) = (compute_stress,)
 @inline parallel_state_functions(::Elasticity) = compute_stress, compute_pressure
-@inline parallel_state_functions(::DruckerPrager) = compute_stress, compute_pressure, compute_lambda
+@inline parallel_state_functions(::DruckerPrager) = compute_stress, compute_pressure, compute_lambda, compute_plastic_strain_rate, compute_volumetric_plastic_strain_rate
 @inline parallel_state_functions(::AbstractRheology) = error("Rheology not defined")
 # handle tuples
 @inline parallel_state_functions(r::NTuple{N, AbstractRheology}) where N = parallel_state_functions(first(r))..., parallel_state_functions(Base.tail(r))...

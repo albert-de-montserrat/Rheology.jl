@@ -17,11 +17,13 @@ end
 end
 
 # dummy NamedTuple allocators
-@inline differentiable_kwargs(::Type{T}, ::typeof(compute_shear_strain)) where T      = (; τ = zero(T),)
-@inline differentiable_kwargs(::Type{T}, ::typeof(compute_volumetric_strain)) where T = (; τ = zero(T), P = zero(T))
-@inline differentiable_kwargs(::Type{T}, ::typeof(compute_lambda)) where T            = (; τ = zero(T), P = zero(T))
-@inline differentiable_kwargs(::Type{T}, ::typeof(compute_stress)) where T            = (; ε = zero(T),)
-@inline differentiable_kwargs(::Type{T}, ::typeof(compute_pressure)) where T          = (; θ = zero(T),)
+@inline differentiable_kwargs(::Type{T}, ::typeof(compute_strain_rate))                    where T = (; τ = zero(T),)
+@inline differentiable_kwargs(::Type{T}, ::typeof(compute_volumetric_strain_rate))         where T = (; τ = zero(T), P = zero(T))
+@inline differentiable_kwargs(::Type{T}, ::typeof(compute_lambda))                         where T = (; τ = zero(T), P = zero(T))
+@inline differentiable_kwargs(::Type{T}, ::typeof(compute_stress))                         where T = (; ε = zero(T),)
+@inline differentiable_kwargs(::Type{T}, ::typeof(compute_pressure))                       where T = (; θ = zero(T),)
+@inline differentiable_kwargs(::Type{T}, ::typeof(compute_plastic_strain_rate))            where T = (; τ_pl = zero(T),)
+@inline differentiable_kwargs(::Type{T}, ::typeof(compute_volumetric_plastic_strain_rate)) where T = (; τ_pl = zero(T), P_pl = zero(T))
 
 differentiable_kwargs(funs::NTuple{N, Any}) where N = differentiable_kwargs(Float64, funs)
 

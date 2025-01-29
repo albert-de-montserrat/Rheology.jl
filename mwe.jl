@@ -246,9 +246,9 @@ end
 # powerlaw = PowerLawViscosity(1e30, 2)
 # elastic  = Elasticity(1e10, Inf)
 
-# @test compute_shear_strain(viscous, (τ = 1e9)) == 5e-12
-# @test compute_shear_strain(powerlaw, (τ = 1e9)) == 5e-13
-# @test compute_shear_strain(elastic, (τ = 1e9, dt = 1e10)) == 5e-12
+# @test compute_shear_strain_rate(viscous, (τ = 1e9)) == 5e-12
+# @test compute_shear_strain_rate(powerlaw, (τ = 1e9)) == 5e-13
+# @test compute_shear_strain_rate(elastic, (τ = 1e9, dt = 1e10)) == 5e-12
 
 # @test compute_volumetric_strain(viscous, (;)) == 0
 # @test compute_volumetric_strain(powerlaw, (;)) == 0
