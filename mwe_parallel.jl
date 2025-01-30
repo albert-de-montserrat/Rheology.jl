@@ -44,6 +44,7 @@ function main(vars, composite, args; mode = :series, max_iter=100, tol=1e-10, ve
 
         J = compute_jacobian(x, composite, statefuns, args_diff, args_nondiff)
         R = compute_residual(composite, statefuns, vars, args)
+        @show R J
     
         Δx  = -J \ R
         α   = bt_line_search(Δx, J, R, statefuns, composite, args, vars)
@@ -63,17 +64,21 @@ function main(vars, composite, args; mode = :series, max_iter=100, tol=1e-10, ve
 end
 
 # define rheologies
-viscous  = LinearViscosity(1e6)
+viscous  = LinearViscosity(1e22)
 powerlaw = PowerLawViscosity(5e19, 3)
 elastic  = Elasticity(1e10, 1e100) # im making up numbers
-drucker  = DruckerPrager(1e6, 30, 10) # C, ϕ, ψ
+drucker  = DruckerPrager(1e6, 30, 0) # C, ϕ, ψ
 # define args
 dt = 1e10
 # composite rheology
 composite =  (viscous, drucker,) #, powerlaw, 
 mode = :series
 
-args = (; τ = 100e6, P=1e6, λ = 0, dt=dt) # we solve for this, initial guess
-vars=input_vars = (; ε = 1e-15, θ = 0, λ = 0) # input variables
+args = (; τ = 100e6, λ = 0, dt=dt, P=1e6) # we solve for this, initial guess
+#vars=input_vars = (; ε = 1e-15, θ = 0, λ = 0, P=1e6) # input variables
+vars=input_vars = (; ε = 1e-15, λ = 0) # input variables
 
-main(input_vars, composite, args; mode=mode, verbose = true)
+
+sol = main(input_vars, composite, args; mode=mode, verbose = true)
+
+#compute_F(drucker, sol.τ, args.P)
