@@ -65,15 +65,15 @@ end
 # define rheologies
 viscous  = LinearViscosity(1e6)
 powerlaw = PowerLawViscosity(5e19, 3)
-elastic  = Elasticity(1e10, 1e12) # im making up numbers
+elastic  = Elasticity(1e10, 1e100) # im making up numbers
 drucker  = DruckerPrager(1e6, 30, 10) # C, ϕ, ψ
 # define args
-# dt = 1e10
+dt = 1e10
 # composite rheology
-composite =  (drucker,) #, powerlaw, elastic
-mode = :parallel
+composite =  (viscous, drucker,) #, powerlaw, 
+mode = :series
 
-args = (; ε = 1e-15, θ = 1e-15, τ_pl = 1e9, P_pl = 1e6, λ = 0) # we solve for this, initial guess
-vars=input_vars = (; τ = 1e9, P = 1e6, ε = 0, θ = 0, λ = 0) # input variables
+args = (; τ = 100e6, P=1e6, λ = 0, dt=dt) # we solve for this, initial guess
+vars=input_vars = (; ε = 1e-15, θ = 0, λ = 0) # input variables
 
 main(input_vars, composite, args; mode=mode, verbose = true)

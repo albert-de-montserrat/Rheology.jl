@@ -21,7 +21,7 @@ end
 # compute_volumetric_strain_rate methods
 @inline function compute_lambda(r::DruckerPrager; τ = 0, λ = 0, P = 0, kwargs...) 
     F = compute_F(r, τ, P)
-    (F>0) * F * λ
+    (F>0) * F #* λ
 end
 
 @inline compute_lambda(r::AbstractRheology; kwargs...) = 0 # for any other rheology that doesnt need this method
@@ -31,7 +31,7 @@ end
 # special plastic helper functions
 function compute_F(r::DruckerPrager, τ, P) 
     F = (τ - P * sind(r.ϕ) - r.C * cosd(r.ϕ))
-    # F * (F > 0)
+    F * (F > 0)
 end
 compute_Q(r::DruckerPrager, τ, P) = τ - P * sind(r.ψ)
 

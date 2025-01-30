@@ -30,7 +30,7 @@ function _compute_jacobian(x::SVector{N}, compositeᵢ, statefuns, args_diff::Na
 end
 
 
-_compute_jacobian(x, composite[1], statefuns,  args_diff, args_nondiff)
+# _compute_jacobian(x, composite[1], statefuns,  args_diff, args_nondiff)
 # _compute_jacobian(x, composite[2], statefuns,  args_diff, args_nondiff)
 
 
