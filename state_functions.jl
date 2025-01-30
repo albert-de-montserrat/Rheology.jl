@@ -4,9 +4,8 @@
 @inline compute_strain_rate(r::Elasticity; τ = 0, τ0 = 0, dt = 0, kwargs...) = (τ - τ0) / (2 * r.G * dt)
 @inline compute_strain_rate(r::AbstractRheology; kwargs...) = 0 # for any other rheology that doesnt need this method
 @inline function compute_strain_rate(r::DruckerPrager; τ = 0, λ = 0, P = 0, kwargs...) 
-    epl = λ * ForwardDiff.derivative(x -> compute_Q(r, x, P), τ) # perhaps this derivative needs to be hardcoded
-    @show epl λ
-    return epl
+    F = compute_F(r, τ, P)
+    (F>0)*λ * ForwardDiff.derivative(x -> compute_Q(r, x, P), τ) # perhaps this derivative needs to be hardcoded
 end
 # splatter wrapper
 @inline compute_strain_rate(r::AbstractRheology, kwargs::NamedTuple) = compute_strain_rate(r; kwargs...)
@@ -23,7 +22,7 @@ end
 # compute_volumetric_strain_rate methods
 @inline function compute_lambda(r::DruckerPrager; τ = 0, λ = 0, P = 0, kwargs...) 
     F = compute_F(r, τ, P)
-    (F>0) * F #* λ
+    (F>0) * F - λ
 end
 
 @inline compute_lambda(r::AbstractRheology; kwargs...) = 0 # for any other rheology that doesnt need this method

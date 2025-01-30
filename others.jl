@@ -8,8 +8,6 @@
         return inv(v)
     end
 end
-harmonic_average_stress(composite, vars) 
-
 
 harmonic_average_stress(r, args) = harmonic_average(r, compute_stress, args)
 harmonic_average_strain_rate(r, args) = harmonic_average(r, compute_strain_rate, args)
