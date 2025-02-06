@@ -11,10 +11,10 @@ end
 @generated function compute_jacobian(x, composite::NTuple{N1, Any}, statefuns::NTuple{N2, Any}, args_diff, args_nondiff) where {N1,N2}
     quote
         J = @SMatrix zeros(N2, N2)
-        Base.@nexprs $N1 i -> begin # this will be put into a function, hardcoded for now
-            J += _compute_jacobian(x, composite[i], statefuns,  args_diff, args_nondiff)
-        end
-        J
+        # Base.@nexprs $N1 i -> begin # this will be put into a function, hardcoded for now
+        #     J += _compute_jacobian(x, composite[i], statefuns,  args_diff, args_nondiff)
+        # end
+        # J
     end
 end
 
