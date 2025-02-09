@@ -46,6 +46,7 @@ drucker  = DruckerPrager(1e6, 30, 0) # C, ϕ, ψ
 
 
 composite        = Series(viscous, powerlaw, drucker)
+c2             = Series(viscous, powerlaw, drucker, drucker)
 p1        = Parallel(viscous, powerlaw, drucker)
 
 #comp1 = Series(viscous, p1, viscous)

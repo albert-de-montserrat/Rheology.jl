@@ -30,11 +30,43 @@ DruckerPrager(args...) = DruckerPrager(promote(args...)...)
 @inline series_state_functions(::PowerLawViscosity) = (compute_strain_rate,)
 @inline series_state_functions(::Elasticity) = compute_strain_rate, compute_volumetric_strain_rate
 #@inline series_state_functions(::DruckerPrager) = compute_strain_rate, compute_volumetric_strain_rate, compute_lambda
-@inline series_state_functions(::DruckerPrager) = compute_strain_rate, compute_lambda
+@inline series_state_functions(::DruckerPrager) = (compute_strain_rate, compute_lambda)
 
 @inline series_state_functions(::AbstractRheology) = error("Rheology not defined")
 # handle tuples
 @inline series_state_functions(r::NTuple{N, AbstractRheology}) where N = series_state_functions(first(r))..., series_state_functions(Base.tail(r))...
+  
+@inline function series_state_functions(r::NTuple{N, AbstractRheology}, number::NTuple{N, Int}) where N 
+    # this can likely be improved. What it does is to give back a list with computational
+    # functions for the whole series elements. Each element has a strain rate function, 
+    # but if we have, say, different plastic rheologies each of them must have its 
+    # own lambda function. This function guarantees that, along with a unique number for 
+    # each of the additional entries
+
+    # NOTE: can likely be improved w.r.t. allocations
+
+    rr = series_state_functions.(r) # functions for all elements
+    
+    # Now create a unique list of functions along with their number
+    rrr =  series_state_functions(r) 
+    num = zeros(Int, length(rrr))
+    n = 0
+    for i=1:N
+        for j=1:length(rr[i])
+            n += 1
+            num[n] = number[i]
+        end
+    end
+    # remove the ones that are called "compute_strain_rate", but keep the rest
+
+    ind = findall(rrr .!= compute_strain_rate)
+    
+    out_state_funs = (compute_strain_rate, rrr[ind]...)
+    out_number     = (num[ind]...,)   # unsure if we can always assume  
+    
+    return out_state_funs, out_number
+end
+
 @inline series_state_functions(::Tuple{})= ()
 
 ## METHODS FOR PARALLEL MODELS
@@ -47,6 +79,36 @@ DruckerPrager(args...) = DruckerPrager(promote(args...)...)
 # handle tuples
 @inline parallel_state_functions(r::NTuple{N, AbstractRheology}) where N = parallel_state_functions(first(r))..., parallel_state_functions(Base.tail(r))...
 @inline parallel_state_functions(::Tuple{})= ()
+
+
+@inline function parallel_state_functions(r::NTuple{N, AbstractRheology}, number::NTuple{N, Int}) where N 
+   
+    # NOTE: can likely be improved w.r.t. allocations
+
+    rr  = parallel_state_functions.(r) # functions for all elements
+    
+    # Now create a unique list of functions along with their number
+    rrr =  parallel_state_functions(r) 
+    num = zeros(Int, length(rrr))
+    n = 0
+    for i=1:N
+        for j=1:length(rr[i])
+            n += 1
+            num[n] = number[i]
+        end
+    end
+    # remove the ones that are called "compute_strain_rate", but keep the rest
+
+    ind = findall(rrr .!= compute_stress .&& rrr .!= compute_pressure)
+
+    out_state_funs = (compute_stress, rrr[ind]...)
+    if any(rrr .== compute_pressure)
+        out_state_funs = (compute_stress, compute_pressure, rrr[ind]...)
+    end
+    out_number     = (num[ind]...,)   # unsure if we can always assume  
+    
+    return out_state_funs, out_number
+end
 
 #####
 

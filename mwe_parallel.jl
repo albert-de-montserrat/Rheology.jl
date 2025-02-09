@@ -36,9 +36,9 @@ function main(vars, composite, args, mode; max_iter=100, tol=1e-10, verbose=fals
     x = SA[values(args_diff)...]
 
     ## START NEWTON RAPHSON SOLVER
-    max_iter = 100
+    #max_iter = 100
     err, iter = 1e3, 0
-    tol = 1e-8
+    #tol = 1e-8
 
     while err > tol
         iter += 1
@@ -69,7 +69,7 @@ end
 # @descend main(input_vars, composite, args; mode=mode, verbose = true, tol=1e-9)
 
 # define rheologies
-viscous  = LinearViscosity(1e18)
+viscous  = LinearViscosity(1e22)
 powerlaw = PowerLawViscosity(5e19, 3)
 elastic  = Elasticity(1e10, 1e100) # im making up numbers
 drucker  = DruckerPrager(1e6, 30, 0) # C, ϕ, ψ
