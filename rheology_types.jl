@@ -29,14 +29,17 @@ DruckerPrager(args...) = DruckerPrager(promote(args...)...)
 @inline series_state_functions(::LinearViscosity) = (compute_strain_rate,)
 @inline series_state_functions(::PowerLawViscosity) = (compute_strain_rate,)
 @inline series_state_functions(::Elasticity) = compute_strain_rate, compute_volumetric_strain_rate
-#@inline series_state_functions(::DruckerPrager) = compute_strain_rate, compute_volumetric_strain_rate, compute_lambda
+@inline series_state_functions(::DruckerPrager) = compute_strain_rate, compute_volumetric_strain_rate, compute_lambda
+
 @inline series_state_functions(::DruckerPrager) = (compute_strain_rate, compute_lambda)
+
+@inline series_state_functions(r::Series) = series_state_functions(r.elements)
 
 @inline series_state_functions(::AbstractRheology) = error("Rheology not defined")
 # handle tuples
 @inline series_state_functions(r::NTuple{N, AbstractRheology}) where N = series_state_functions(first(r))..., series_state_functions(Base.tail(r))...
   
-@inline function series_state_functions(r::NTuple{N, AbstractRheology}, number::NTuple{N, Int}) where N 
+@inline function series_state_functions(r::NTuple{N, AbstractRheology}, number::Tuple) where N 
     # this can likely be improved. What it does is to give back a list with computational
     # functions for the whole series elements. Each element has a strain rate function, 
     # but if we have, say, different plastic rheologies each of them must have its 
@@ -59,10 +62,14 @@ DruckerPrager(args...) = DruckerPrager(promote(args...)...)
     end
     # remove the ones that are called "compute_strain_rate", but keep the rest
 
-    ind = findall(rrr .!= compute_strain_rate)
+    ind = findall(rrr .!= compute_strain_rate.&& rrr .!= compute_volumetric_strain_rate  )
     
     out_state_funs = (compute_strain_rate, rrr[ind]...)
-    out_number     = (num[ind]...,)   # unsure if we can always assume  
+    out_number     = (0,num[ind]...,)   # 0 implies that all elements have this defined
+    if any(rrr .== compute_volumetric_strain_rate)
+        out_state_funs = (compute_strain_rate, compute_volumetric_strain_rate, rrr[ind]...)
+        out_number     = (0,0, num[ind]...,)   # unsure if we can always assume  
+    end
     
     return out_state_funs, out_number
 end
@@ -97,15 +104,16 @@ end
             num[n] = number[i]
         end
     end
-    # remove the ones that are called "compute_strain_rate", but keep the rest
+    # remove the ones that are called "compute_stress" and/or "compute_pressure", but keep the rest
 
     ind = findall(rrr .!= compute_stress .&& rrr .!= compute_pressure)
 
     out_state_funs = (compute_stress, rrr[ind]...)
+    out_number     = (0,num[ind]...,)   # 0 implies that all elements have this defined
     if any(rrr .== compute_pressure)
         out_state_funs = (compute_stress, compute_pressure, rrr[ind]...)
+        out_number     = (0,0, num[ind]...,)   # unsure if we can always assume  
     end
-    out_number     = (num[ind]...,)   # unsure if we can always assume  
     
     return out_state_funs, out_number
 end

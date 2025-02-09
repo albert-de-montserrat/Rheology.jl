@@ -26,7 +26,35 @@ end
 @inline differentiable_kwargs(::Type{T}, ::typeof(compute_plastic_stress))                 where T = (; τ_pl = zero(T),)
 @inline differentiable_kwargs(::Type{T}, ::typeof(compute_volumetric_plastic_strain_rate)) where T = (; τ_pl = zero(T), P_pl = zero(T))
 
+# add numbers to the differentiable_kwargs as long as they are not part of the standard series variables
+function attach_nums(x::NamedTuple, n::Int64)
+    # This allocates - to be fixed!
+
+    k = keys(x)
+    v = values(x)
+    
+    k_string = String.(k)    
+    k_new = ()
+    for s in k_string
+        if s != "τ" && s != "P"
+            k_new = (k_new..., Symbol(s*"_$n"))
+        else
+            k_new = (k_new..., Symbol(s))
+        end
+    end
+    
+    return NamedTuple{k_new}(v)
+end
+
+@inline differentiable_kwargs(::Type{T}, ::typeof(compute_strain_rate), i::Int64)                    where T = attach_nums((; τ = zero(T),), i)
+@inline differentiable_kwargs(::Type{T}, ::typeof(compute_volumetric_strain_rate), i::Int64)         where T = attach_nums((; τ = zero(T), P = zero(T)),i)
+@inline differentiable_kwargs(::Type{T}, ::typeof(compute_lambda), i::Int64)                         where T = attach_nums((; λ = zero(T)),i) # τ = zero(T), P = zero(T))
+
+
+
+
 differentiable_kwargs(funs::NTuple{N, Any}) where N = differentiable_kwargs(Float64, funs)
+differentiable_kwargs(funs::NTuple{N, Any}, nums::NTuple{N,Any}) where N = differentiable_kwargs(Float64, funs, nums)
 
 @generated function differentiable_kwargs(::Type{T}, funs::NTuple{N, Any}) where {N, T}
     quote
@@ -35,6 +63,15 @@ differentiable_kwargs(funs::NTuple{N, Any}) where N = differentiable_kwargs(Floa
         Base.@ncall $N merge nt
     end
 end
+
+@generated function differentiable_kwargs(::Type{T}, funs::NTuple{N, Any}, nums::NTuple{N,I}) where {N, T, I}
+    quote
+        @inline 
+        Base.@nexprs $N i -> nt_i = differentiable_kwargs($T, funs[i], nums[i])
+        Base.@ncall $N merge nt
+    end
+end
+
 
 function split_args(args, statefuns::NTuple{N, Any}) where N
     # split args into differentiable and not differentiable
@@ -61,7 +98,6 @@ function number_elements(composite::NTuple{N, AbstractRheology}; start::Int64=1)
         if isa(composite[i], Series) || isa(composite[i], Parallel)
             # recursively deal with series (or parallel) elements
             numel = number_elements(composite[i].elements, start=n)
-            @show numel
             number = (number..., numel)
             n = maximum(numel)
         else

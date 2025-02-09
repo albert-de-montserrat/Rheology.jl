@@ -4,11 +4,6 @@ using LinearAlgebra
 using StaticArrays
 using ForwardDiff
 
-include("rheology_types.jl")
-include("state_functions.jl")
-include("kwargs.jl")
-include("matrices.jl")
-#include("others.jl")
 
 # struc that holds serial elements
 struct Series{N} <: AbstractRheology
@@ -36,6 +31,12 @@ function Parallel(args...)
 end
 get_unique_state_functions(composite::Parallel) = get_unique_state_functions(composite.elements, :parallel) 
 
+include("rheology_types.jl")
+include("state_functions.jl")
+include("kwargs.jl")
+include("matrices.jl")
+#include("others.jl")
+
 
 viscous  = LinearViscosity(1e22)
 powerlaw = PowerLawViscosity(5e19, 3)
@@ -45,17 +46,19 @@ drucker  = DruckerPrager(1e6, 30, 0) # C, ϕ, ψ
 #composite =  (viscous, drucker,) #, powerlaw, 
 
 
-composite        = Series(viscous, powerlaw, drucker)
-c2             = Series(viscous, powerlaw, drucker, drucker)
-p1        = Parallel(viscous, powerlaw, drucker)
+c1  = Series(viscous, powerlaw, drucker)
+c2  = Series(viscous, powerlaw, drucker, drucker)
+c3  = Series(viscous, Series(drucker,powerlaw), drucker, drucker)
+p1  = Parallel(viscous, powerlaw, drucker)
+c4  = Series(viscous, Parallel(drucker,powerlaw), drucker, drucker)
+
 
 #comp1 = Series(viscous, p1, viscous)
 
 
-
 vars = input_vars = (; ε = 1e-15, λ = 0) # input variables
 args = (; τ = 1e2, P = 1e6, dt = 1e10) # we solve for this, initial guess
-statefuns  = get_unique_state_functions(composite)
+statefuns  = get_unique_state_functions(c1)
 
 args_diff, args_nondiff = split_args(args, statefuns)
 
@@ -68,3 +71,10 @@ x = SA[values(args_diff)...]
 
 # needs adjustments
 #R = compute_residual(composite.elements, statefuns, vars, args)
+
+
+# try to get the correct number of state functions for this case
+statefuns, statenums = series_state_functions(c2.elements, c2.number)
+
+# this takes care 
+args_diff = differentiable_kwargs(statefuns, statenums)
