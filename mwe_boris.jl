@@ -73,8 +73,8 @@ x = SA[values(args_diff)...]
 #R = compute_residual(composite.elements, statefuns, vars, args)
 
 
-# try to get the correct number of state functions for this case
+# Get the correct number of state functions for this case
 statefuns, statenums = series_state_functions(c2.elements, c2.number)
 
-# this takes care 
+# this takes care of repeated elements that are not the standard series elements
 args_diff = differentiable_kwargs(statefuns, statenums)
