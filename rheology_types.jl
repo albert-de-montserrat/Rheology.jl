@@ -79,7 +79,6 @@ end
     end
 end
 
-
 function get_unique_state_functions(composite::NTuple{N, AbstractRheology}, model::Symbol) where N
     funs = if model === :series
         get_unique_state_functions(composite, series_state_functions)
@@ -96,3 +95,5 @@ function get_unique_state_functions(composite::NTuple{N, AbstractRheology}, stat
     # get unique state functions
     return flatten_repeated_functions(funs)
 end
+
+# get_unique_state_functions(::AbstractCompositeModel, ::Any) = ()

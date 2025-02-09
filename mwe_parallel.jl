@@ -7,7 +7,7 @@ include("state_functions.jl")
 include("kwargs.jl")
 include("matrices.jl")
 include("others.jl")
-# include("composite.jl") # not functional yet
+include("composite.jl") # not functional yet
 
 function bt_line_search(Δx, J, R, statefuns, composite::NTuple{N, Any}, args, vars; α=1.0, ρ=0.5, c=1e-4, α_min=1e-8) where N
     perturbed_args = augment_args(args, α * Δx)
@@ -25,7 +25,7 @@ function bt_line_search(Δx, J, R, statefuns, composite::NTuple{N, Any}, args, v
     return α
 end
 
-function main(vars, composite, args; mode = :series, max_iter=100, tol=1e-10, verbose=false)
+function main(vars, composite, args, mode; max_iter=100, tol=1e-10, verbose=false)
 
     # pull state functions
     statefuns = get_unique_state_functions(composite, mode)
@@ -45,7 +45,6 @@ function main(vars, composite, args; mode = :series, max_iter=100, tol=1e-10, ve
 
         J = compute_jacobian(x, composite, statefuns, args_diff, args_nondiff)
         R = compute_residual(composite, statefuns, vars, args)
-        #@show R J
         
         Δx  = -J \ R
         α   = bt_line_search(Δx, J, R, statefuns, composite, args, vars)
@@ -64,6 +63,11 @@ function main(vars, composite, args; mode = :series, max_iter=100, tol=1e-10, ve
     return update_args(args_diff, x)
 end
 
+# @code_warntype main(input_vars, composite, args, mode; verbose = true, tol=1e-9)
+# main(input_vars, composite, args, mode; verbose = true, tol=1e-9)
+# @b main($input_vars, $composite, $args, mode; verbose = true, tol=1e-9)
+# @descend main(input_vars, composite, args; mode=mode, verbose = true, tol=1e-9)
+
 # define rheologies
 viscous  = LinearViscosity(1e18)
 powerlaw = PowerLawViscosity(5e19, 3)
@@ -76,12 +80,17 @@ composite =  (viscous, drucker,) #, powerlaw,
 mode = :series
 
 
-#vars=input_vars = (; ε = 1e-15, θ = 0, λ = 0, P=1e6) # input variables
-vars=input_vars = (; ε = 1e-15, λ = 0) # input variables
+# #vars=input_vars = (; ε = 1e-15, θ = 0, λ = 0, P=1e6) # input variables
+# vars = input_vars = (; ε = 1e-15, λ = 0) # input variables
 
-τ_guess = harmonic_average_stress(composite, vars)
-args    = (; τ = τ_guess, λ = 0, dt=dt, P=1e6) # we solve for this, initial guess
-sol     = main(input_vars, composite, args; mode=mode, verbose = true, tol=1e-9)
+# τ_guess = harmonic_average_stress(composite, vars)
+# args    = (; τ = τ_guess, λ = 0, dt=dt, P=1e6) # we solve for this, initial guess
 
-F = compute_F(drucker, sol.τ, args.P)
-@show F
+# sol     = main(input_vars, composite, args, mode; verbose = true, tol=1e-9)
+
+# F = compute_F(drucker, sol.τ, args.P)
+# @show F
+
+# @code_warntype compute_residual(composite, statefuns, vars, args)
+# @code_warntype compute_jacobian(x, composite, statefuns, args_diff, args_nondiff)
+

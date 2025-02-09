@@ -6,7 +6,7 @@ include("rheology_types.jl")
 include("state_functions.jl")
 include("kwargs.jl")
 include("matrices.jl")
-# include("composite.jl") # not functional yet
+include("composite.jl") # not functional yet
 
 function bt_line_search(Δx, J, R, statefuns, composite::NTuple{N, Any}, args, vars; α=1.0, ρ=0.5, c=1e-4, α_min=1e-8) where N
     perturbed_args = augment_args(args, α * Δx)
@@ -118,7 +118,62 @@ function main_series2(args; max_iter=100, tol=1e-10, verbose=false)
 end
 
 args = (; τ = 1e2) # we solve for this, initial guess
-main_series2(args; verbose = true)
+@code_warntype main_series2(args; verbose = true)
+
+function main_series3(composite, args, vars, mode; max_iter=100, tol=1e-10, verbose=false)
+    # pull state functions
+    statefuns = get_unique_state_functions(composite, mode)
+
+    # split args into differentiable and not differentiable
+    args_diff, args_nondiff = split_args(args, statefuns)
+    # rhs of the system of eqs, initial guess
+    x = SA[values(args_diff)...]
+
+    ## START NEWTON RAPHSON SOLVER
+    err, iter = 1e3, 0
+
+    while err > tol
+        iter += 1
+
+        J    = compute_jacobian(x, composite, statefuns, args_diff, args_nondiff)
+        R    = compute_residual(composite, statefuns, vars, args)
+
+        Δx   = -J \ R
+        α    = bt_line_search(Δx, J, R, statefuns, composite, args, vars)
+        x   += Δx # * α
+        err  = sqrt(sum( (Δx ./ abs.(x)).^2))
+        iter > max_iter &&  break
+
+        # update args, this should be generalized (still not general enough)
+        args = update_args(args, x)
+
+        if verbose; println("iter: $iter, x: $x, err: $err, α = $α"); end
+
+    end
+end
+@code_warntype main_series3(composite, args, vars, :series; verbose = true)
+
+viscous  = LinearViscosity(5e19)
+powerlaw = PowerLawViscosity(5e19, 3)
+vars     = (; ε = 1e-15) # input variables
+
+# composite rheology
+composite = viscous, powerlaw
+args      = (; τ = 1e2) # we solve for this, initial guess
+
+
+viscous  = LinearViscosity(1e18)
+powerlaw = PowerLawViscosity(5e19, 3)
+elastic  = Elasticity(1e10, 1e100) # im making up numbers
+drucker  = DruckerPrager(1e6, 30, 0) # C, ϕ, ψ
+# define args
+dt = 1e10
+# composite rheology
+composite =  (viscous, drucker,) #, powerlaw, 
+mode = :series
+
+@code_warntype main_series2(args; verbose = true)
+
 #@b main_series2($args; verbose = false)
 
 function main_series_viscoelastic(args; max_iter=100, tol=1e-10, verbose=false)
