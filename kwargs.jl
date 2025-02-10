@@ -29,7 +29,6 @@ end
 # add numbers to the differentiable_kwargs as long as they are not part of the standard series variables
 function attach_nums(x::NamedTuple, n::Int64)
     # This allocates - to be fixed!
-
     k = keys(x)
     v = values(x)
     
@@ -106,8 +105,9 @@ function number_elements(composite::NTuple{N, AbstractRheology}; start::Int64=1)
         else
             number = (number..., n)
         end
-
     end
     
     return number
 end
+
+

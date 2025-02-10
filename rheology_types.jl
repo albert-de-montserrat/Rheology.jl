@@ -30,10 +30,8 @@ DruckerPrager(args...) = DruckerPrager(promote(args...)...)
 @inline series_state_functions(::PowerLawViscosity) = (compute_strain_rate,)
 @inline series_state_functions(::Elasticity) = compute_strain_rate, compute_volumetric_strain_rate
 @inline series_state_functions(::DruckerPrager) = compute_strain_rate, compute_volumetric_strain_rate, compute_lambda
-
 @inline series_state_functions(::DruckerPrager) = (compute_strain_rate, compute_lambda)
-
-@inline series_state_functions(r::Series) = series_state_functions(r.elements)
+#@inline series_state_functions(r::Series) = series_state_functions(r.elements)
 
 @inline series_state_functions(::AbstractRheology) = error("Rheology not defined")
 # handle tuples

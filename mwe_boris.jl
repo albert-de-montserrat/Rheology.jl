@@ -4,7 +4,15 @@ using LinearAlgebra
 using StaticArrays
 using ForwardDiff
 
+include("rheology_types.jl")
+include("state_functions.jl")
+include("matrices.jl")
+#include("others.jl")
 
+include("composite.jl")
+include("kwargs.jl")
+
+#=
 # struc that holds serial elements
 struct Series{N} <: AbstractRheology
     elements::NTuple{N,AbstractRheology}
@@ -30,12 +38,6 @@ function Parallel(args...)
     return Parallel(args, number, N_jac)
 end
 get_unique_state_functions(composite::Parallel) = get_unique_state_functions(composite.elements, :parallel) 
-
-include("rheology_types.jl")
-include("state_functions.jl")
-include("kwargs.jl")
-include("matrices.jl")
-#include("others.jl")
 
 
 viscous  = LinearViscosity(1e22)
@@ -77,4 +79,38 @@ x = SA[values(args_diff)...]
 statefuns, statenums = series_state_functions(c2.elements, c2.number)
 
 # this takes care of repeated elements that are not the standard series elements
+args_diff = differentiable_kwargs(statefuns, statenums)
+=#
+
+
+
+# --
+# testing SeriesModel and CompositeModel
+viscous  = LinearViscosity(1e22)
+powerlaw = PowerLawViscosity(5e19, 3)
+elastic  = Elasticity(1e10, 1e100) # im making up numbers
+drucker  = DruckerPrager(1e6, 30, 0) # C, ϕ, ψ
+
+s1 = SeriesModel(viscous, drucker, drucker)
+p1 = ParallelModel(viscous, drucker, elastic)
+c1 = CompositeModel(SeriesModel(s1, p1))
+c0 = CompositeModel(s1)
+
+p2 = ParallelModel(viscous, powerlaw)
+s2 = SeriesModel(viscous, p2, elastic)
+c2 = CompositeModel(s2)
+
+p3 = ParallelModel(s2, viscous)
+c3 = CompositeModel(p3)
+
+# get the numbering of each of the elements
+numel = number_elements(c0)  # numbering of each element
+
+# Get unique state functions for this rheology
+statefuns, statenums = series_state_functions(s1.children, numel)
+args_diff = differentiable_kwargs(statefuns, statenums)
+
+# do the same for a parallel case:
+numel = number_elements(p1) 
+statefuns, statenums = parallel_state_functions(p1.siblings, numel)
 args_diff = differentiable_kwargs(statefuns, statenums)
