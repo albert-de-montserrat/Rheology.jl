@@ -133,34 +133,51 @@ end
 # number_elements(c::CompositeModel) = number_elements(c.components, start=1)
 
 
-number_elements(c::CompositeModel)  = number_elements(c.components, Val(0))
-number_elements(::AbstractRheology, ::Val{C}) where C = C
+global_numbering(::NTuple{N, Int}) where N = ntuple(i -> i, Val(N))
 
-function number_elements(c::NTuple{N, Any}, ::Val{C}) where {N,C} 
-    # local number of the components within a single Series/Parallel model
-    local_number = ntuple(Val(N)) do i 
-        @inline
-        number_elements(c[i], Val(C))
-    end
-    # global numbering
+function global_numbering(local_number::Tuple) 
     shift = Ref(0)
-    global_number = ntuple(Val(N)) do i 
+    ntuple(Val(length(local_number))) do i 
         @inline
-        shift[] += i == 1 ? 0 : last(local_number[i-1])
-        local_number[i] .+ shift[]
+        ntuple(Val(length(local_number[i]))) do j
+            @inline
+            shift[] += 1
+            shift[]
+        end
     end
 end
 
-function number_elements(s::SeriesModel{N}, ::Val{C}) where {N,C} 
-    number = ntuple(Val(N)) do i 
+function clean_numbers(numbers::NTuple{N, Any}) where N
+    ntuple(Val(N)) do i
         @inline
-        number_elements(s.children[i], Val(C+i))
+        _clean_numbers(numbers[i])
     end
 end
 
-function number_elements(s::ParallelModel{N}, ::Val{C}) where {N,C} 
-    number = ntuple(Val(N)) do i 
+_clean_numbers(numbers::Int)                    = numbers
+_clean_numbers(numbers::NTuple{1, Int})         = first(numbers)
+_clean_numbers(numbers::NTuple{N, Int}) where N = numbers
+
+function number_elements(c::CompositeModel)
+    # local number of the components within a single Series/Parallel model
+    local_number = number_elements(c.components, 0)
+    # global numbering
+    global_number = global_numbering(local_number)
+    clean_numbers(global_number)
+end
+
+@inline number_elements(::AbstractRheology, ::Any) = 1
+
+@generated function number_elements(s::SeriesModel{N}, ::C) where {N,C} 
+    quote 
         @inline
-        number_elements(s.siblings[i], Val(C+i))
+        Base.@ntuple $N i -> number_elements(s.children[i],i)
+    end
+end
+
+@generated function number_elements(s::ParallelModel{N}, ::C) where {N,C} 
+    quote 
+        @inline
+        Base.@ntuple $N i -> number_elements(s.siblings[i], i)
     end
 end
