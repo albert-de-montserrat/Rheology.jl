@@ -93,45 +93,100 @@ end
 
 # Boris stuff (thus likely needs rewriting)
 
-# function number_elements(s::SeriesModel{N}; start::Int64=1)  where N
-#     # this allocates but only needs to be done once...
-#     number = ()
-#     n = start-1;
-#     for i=1:N
-#         n += 1
-#         if isa(s.children[i], ParallelModel) 
-#         ##    # recursively deal with series (or parallel) elements
-#             numel  = number_elements(s.children[i], start=n+1)
-#             number = (number..., (n,numel))
-#             n = maximum(maximum.(last.(numel)))
-#         else
-#             number = (number..., n)
-#         end
-#     end
-    
-#     return number
-# end
+ function number_elements1(s::SeriesModel{N}; start::Int64=1)  where N
+     # this allocates but only needs to be done once...
+     number = ()
+     n = start-1;
+     for i=1:N
+         n += 1
+         if isa(s.children[i], ParallelModel) 
+         ##    # recursively deal with series (or parallel) elements
+             numel  = number_elements1(s.children[i], start=n+1)
+             number = (number..., (n,numel))
+             n = maximum(maximum.(last.(numel)))
+        elseif isa(s.children[i], SeriesModel) 
+            numel  = number_elements1(s.children[i], start=n)
+            number = (number..., numel...)
+            n = maximum(maximum.(last.(numel)))
+         else
+             number = (number..., n)
+         end
+     end
+   
+     return number
+ end
 
-# function number_elements(s::ParallelModel{N}; start::Int64=1)  where N
-#     # this allocates but only needs to be done once...
-#     number = ()
-#     n = start-1;
-#     for i=1:N
-#         n += 1
-#         if isa(s.siblings[i], SeriesModel) 
-#             # recursively deal with series (or parallel) elements
-#             numel = number_elements(s.siblings[i], start=n+1)
-#             number = (number..., (n,numel))
-#             n = maximum(maximum.(last.(numel)))
-#         else
-#             number = (number..., n)
-#         end
-#     end
-    
-#     return number
-# end
-# number_elements(c::CompositeModel) = number_elements(c.components, start=1)
+function number_elements1(s::ParallelModel{N}; start::Int64=1)  where N
+    # this allocates but only needs to be done once...
+    number = ()
+    n = start-1;
+    for i=1:N
+        n += 1
+        if isa(s.siblings[i], SeriesModel) 
+            # recursively deal with series (or parallel) elements
+            numel = number_elements1(s.siblings[i], start=n+1)
+            number = (number..., (n,numel))
+            n = maximum(maximum.(last.(numel)))
+        elseif isa(s.siblings[i], SeriesModel) 
+            numel  = number_elements1(s.siblings[i], start=n)
+            number = (number..., numel...)
+            n = maximum(maximum.(last.(numel)))
+        else
+            number = (number..., n)
+        end
+    end
+  
+    return number
+end
+number_elements1(c::CompositeModel) = number_elements1(c.components, start=1)
 
+#=
+function number_elements2(s::SeriesModel{N}; start::Int64=1)  where N
+    # this allocates but only needs to be done once...
+    number = ()
+    n = start-1;
+    for i=1:N
+        n += 1
+        if isa(s.children[i], ParallelModel) 
+        ##    # recursively deal with series (or parallel) elements
+            numel  = number_elements2(s.children[i], start=n+1)
+            number = (number..., (n,numel))
+            n = maximum(maximum.(last.(numel)))
+        elseif isa(s.children[i], SeriesModel) 
+            numel  = number_elements2(s.children[i], start=n)
+            number = (number..., numel...)
+            n = maximum(maximum.(last.(numel)))
+        else
+            number = (number..., n)
+        end
+    end
+  
+    return number
+end
+
+function number_elements2(s::ParallelModel{N}; start::Int64=1)  where N
+    # this allocates but only needs to be done once...
+    number = ()
+    n = start-1;
+    for i=1:N
+        n += 1
+        if isa(s.siblings[i], SeriesModel) 
+            # recursively deal with series (or parallel) elements
+            numel = number_elements2(s.siblings[i], start=n+1)
+            number = (number..., (n,numel))
+            n = maximum(maximum.(last.(numel)))
+        elseif isa(s.children[i], ParallelModel) 
+            numel  = number_elements2(s.children[i], start=n)
+            number = (number..., numel...)
+            n = maximum(maximum.(last.(numel)))
+        else
+            number = (number..., n)
+        end
+    end
+  
+    return number
+end
+=#
 
 global_numbering(::NTuple{N, Int}) where N = ntuple(i -> i, Val(N))
 
@@ -181,3 +236,9 @@ end
         Base.@ntuple $N i -> number_elements(s.siblings[i], i)
     end
 end
+
+
+@inline parallel_state_functions(r::ParallelModel) = series_state_functions(r.siblings)
+@inline parallel_state_functions(::SeriesModel) = (compute_strain_rate, compute_stress,)
+@inline series_state_functions(::ParallelModel) = (compute_strain_rate, compute_stress,)
+@inline series_state_functions(r::SeriesModel) = series_state_functions(r.children)
