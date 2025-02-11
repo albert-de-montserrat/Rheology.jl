@@ -3,13 +3,14 @@
 using LinearAlgebra
 using StaticArrays
 using ForwardDiff
+using Test
 
+include("composite.jl")
 include("rheology_types.jl")
 include("state_functions.jl")
 include("matrices.jl")
 #include("others.jl")
 
-include("composite.jl")
 include("kwargs.jl")
 
 #=
@@ -91,6 +92,7 @@ powerlaw = PowerLawViscosity(5e19, 3)
 elastic  = Elasticity(1e10, 1e100) # im making up numbers
 drucker  = DruckerPrager(1e6, 30, 0) # C, ϕ, ψ
 
+#=
 s1 = SeriesModel(viscous, drucker, drucker)
 p1 = ParallelModel(viscous, powerlaw)
 s5 = SeriesModel(s1, p1)
@@ -119,11 +121,82 @@ args_diff = differentiable_kwargs(statefuns, statenums)
 # WIP: combinations of series and parallel
 #numel = number_elements1(c1) 
 #statefuns, statenums = series_state_functions(c1.components, numel)
+=#
 
-# This now gives the expected result:
-numel = number_elements1(s5)
-statefuns, statenums = series_state_functions1(s5, numel)
+#=
+# Series model with 2 plastic elements and a parallel model
+s1 = SeriesModel(viscous, drucker, drucker)
+p1 = ParallelModel(viscous, powerlaw)
+s  = SeriesModel(s1, p1)
+numel = number_elements1(s)
+statefuns, statenums = series_state_functions1(s, numel)
+args_diff = differentiable_kwargs(statefuns, statenums)
+@test statenums == (0,2,3,4)
+@test keys(args_diff) == (:τ, :λ_2, :λ_3, :ε_4)
+
+# same but specified differently
+p1 = ParallelModel(viscous, powerlaw)
+s  = SeriesModel(viscous, drucker, drucker, p1)
+numel = number_elements1(s)
+statefuns, statenums = series_state_functions1(s, numel)
+args_diff = differentiable_kwargs(statefuns, statenums)
+@test statenums == (0,2,3,4)
+@test keys(args_diff) == (:τ, :λ_2, :λ_3, :ε_4)
+
+# 2 parallel elements in series
+p1 = ParallelModel(viscous, powerlaw)
+p2 = ParallelModel(viscous, powerlaw)
+s = SeriesModel(p1, p2)
+numel = number_elements1(s)
+statefuns, statenums = series_state_functions1(s, numel)
+args_diff = differentiable_kwargs(statefuns, statenums)
+@test  keys(args_diff) == (:τ, :ε_1, :ε_4)
+
+# Series that has a parallel model with plasticity
+p1 = ParallelModel(drucker, powerlaw)
+s  = SeriesModel(viscous, drucker, drucker, p1)
+numel = number_elements1(s)
+statefuns, statenums = series_state_functions1(s, numel)
+args_diff = differentiable_kwargs(statefuns, statenums)
+@test statenums == (0,2,3,4,5)
+@test keys(args_diff) == (:τ, :λ_2, :λ_3, :ε_4, :λ_5)
+
+# Parallel model with viscous rheologies
+p  = ParallelModel(viscous, powerlaw)
+numel = number_elements1(p)
+statefuns, statenums = parallel_state_functions1(p, numel)
+args_diff = differentiable_kwargs(statefuns, statenums)
+@test statenums == (0,)
+@test keys(args_diff) == (:ε,)
+
+# Parallel model with serial rheology rheologies
+s1 = SeriesModel(viscous, powerlaw)
+p  = ParallelModel(s1, powerlaw)
+numel = number_elements1(p)
+statefuns, statenums = parallel_state_functions1(p, numel)
+args_diff = differentiable_kwargs(statefuns, statenums)
+@test statenums == (0,1)
+@test keys(args_diff) == (:ε,:τ_1)
+
+# Parallel model with serial rheology rheologies - Broken
+s1 = SeriesModel(viscous, ParallelModel(powerlaw, viscous))
+p  = ParallelModel(s1, powerlaw)
+numel = number_elements1(p)
+statefuns, statenums = parallel_state_functions1(p, numel)
+args_diff = differentiable_kwargs(statefuns, statenums)
+@test statenums == (0,1)
+@test keys(args_diff) == (:ε,:τ_1)
+=#
+
+# simple viscous + powerlaw
+p         = ParallelModel(viscous, elastic)
+s         = SeriesModel(viscous, elastic, p)
+c         = CompositeModel(s)
+statefuns, statenums = series_state_functions(c.components)
 
 
-numel = number_elements1(s1)
-statefuns, statenums = series_state_functions1(s1, numel)
+#numel   = number_elements1(c)
+
+#statefuns, statenums = series_state_functions1(s, numel)
+
+

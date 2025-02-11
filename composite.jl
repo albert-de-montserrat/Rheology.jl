@@ -1,3 +1,6 @@
+abstract type AbstractRheology end
+abstract type AbstractPlasticity <: AbstractRheology end # in case we need spacilization at some point
+
 abstract type AbstractCompositeModel <: AbstractRheology  end
 
 @inline series_state_functions(::AbstractCompositeModel)= ()
@@ -9,14 +12,14 @@ struct CompositeModel{Nstrain, Nstress, T} <: AbstractCompositeModel
     components::T
    # number::NUM
 
-    function CompositeModel(composite::T) where T
-        Nstrain = number_strain_rate_components(composite)
-        Nstress = number_stress_components(composite)
-        #Num     = number_elements(composite)
-        #new{Nstrain, Nstress, T, typeof(Num)}(composite, Num)
-        new{Nstrain, Nstress, T}(composite)
-        
-    end
+   
+end
+function CompositeModel(composite::T) where T
+    Nstrain = number_strain_rate_components(composite)
+    Nstress = number_stress_components(composite)
+    #Num     = number_elements(composite)
+    #new{Nstrain, Nstress, T, typeof(Num)}(composite, Num)
+    return CompositeModel{Nstrain, Nstress, T}(composite)
 end
 CompositeModel(x::Vararg{Any, N}) where N = CompositeModel(tuple(x)...)
 
@@ -43,6 +46,17 @@ function Base.iterate(c::SeriesModel, state = 0)
     return Base.getfield(c, state+1), state+1
 end
 
+
+function CompositeModel(composite::SeriesModel) 
+    Nstrain = number_strain_rate_components(composite)
+    Nstress = number_stress_components(composite)
+    #Num     = number_elements(composite)
+    #new{Nstrain, Nstress, T, typeof(Num)}(composite, Num)
+
+    update_global_numbers(s)        # update numbering
+
+    return CompositeModel{Nstrain, Nstress, typeof(composite)}(composite)
+end
 
 struct ParallelModel{N, T, F} <: AbstractCompositeModel # not 100% about the subtyping here, lets see
     siblings::T # horizontal branching
@@ -213,7 +227,7 @@ end
 @inline parallel_state_functions(r::ParallelModel) = series_state_functions(r.siblings)
 @inline parallel_state_functions(::SeriesModel) = (compute_strain_rate, compute_stress,)
 @inline series_state_functions(::ParallelModel) = (compute_strain_rate, compute_stress,)
-@inline series_state_functions(r::SeriesModel) = series_state_functions(r.children)
+@inline series_state_functions(r::SeriesModel) = series_state_functions(r.children, r.num)
 
 
 # recursively updates the numbers of the elements

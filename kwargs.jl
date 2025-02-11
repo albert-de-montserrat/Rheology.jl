@@ -35,7 +35,7 @@ function attach_nums(x::NamedTuple, n::Int64)
     k_string = String.(k)    
     k_new = ()
     for s in k_string
-        if s != "τ" && s != "P" && s != "ε" && s != "θ"
+        if n>0 #s != "τ" && s != "P" && s != "ε" && s != "θ"
             # we may have to distinguish between parallel & serial cases here
             k_new = (k_new..., Symbol(s*"_$n"))
         else
