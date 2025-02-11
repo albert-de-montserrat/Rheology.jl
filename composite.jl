@@ -23,14 +23,17 @@ CompositeModel(x::Vararg{Any, N}) where N = CompositeModel(tuple(x)...)
 struct SeriesModel{N, T, F} <: AbstractCompositeModel # not 100% about the subtyping here, lets see
     children::T # vertical stacking
     funs::F
-    
-    function SeriesModel(composite::T) where T
-        funs = get_unique_state_functions(composite, :series)
-        funs_flat = flatten_repeated_functions(funs)
-        N = length(composite)
-        new{N, T, typeof(funs_flat)}(composite, funs_flat)
-    end
+    num::NTuple{N, Int}
 end
+
+function SeriesModel(composite::T) where T
+    funs = get_unique_state_functions(composite, :series)
+    funs_flat = flatten_repeated_functions(funs)
+    N = length(composite)
+    SeriesModel{N, T, typeof(funs_flat)}(composite, funs_flat,  Tuple(1:N))
+end
+update_numbers(s::SeriesModel{N, T, F}, num::NTuple) where {N, T, F} = SeriesModel{N, T, F}(s.children, s.funs, num)
+
 SeriesModel(x::Vararg{Any, N}) where N = SeriesModel(tuple(x)...)
 Base.length(x::SeriesModel) = length(x.children)
 Base.getindex(x::SeriesModel, i) = x.children[i]
@@ -39,16 +42,20 @@ function Base.iterate(c::SeriesModel, state = 0)
     return Base.getfield(c, state+1), state+1
 end
 
+
 struct ParallelModel{N, T, F} <: AbstractCompositeModel # not 100% about the subtyping here, lets see
     siblings::T # horizontal branching
     funs::F
-    function ParallelModel(composite::T) where T
-        funs = get_unique_state_functions(composite, :parallel)
-        funs_flat = flatten_repeated_functions(funs)
-        N = length(composite)
-        new{N, T, typeof(funs_flat)}(composite, funs_flat)
-    end
+    num::NTuple{N, Int}
 end
+function ParallelModel(composite::T) where T
+    funs = get_unique_state_functions(composite, :parallel)
+    funs_flat = flatten_repeated_functions(funs)
+    N = length(composite)
+    ParallelModel{N, T, typeof(funs_flat)}(composite, funs_flat, Tuple(1:N))
+end
+update_numbers(s::ParallelModel{N, T, F}, num::NTuple) where {N, T, F} = ParallelModel{N, T, F}(s.siblings, s.funs, num)
+
 ParallelModel(x::Vararg{Any, N}) where N = ParallelModel(tuple(x)...)
 Base.length(x::ParallelModel) = length(x.siblings)
 Base.getindex(x::ParallelModel, i) = x.siblings[i]
