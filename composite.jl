@@ -23,16 +23,17 @@ CompositeModel(x::Vararg{Any, N}) where N = CompositeModel(tuple(x)...)
 struct SeriesModel{N, T, F} <: AbstractCompositeModel # not 100% about the subtyping here, lets see
     children::T # vertical stacking
     funs::F
-    num::NTuple{N, Int}
+    num::MVector{N, Int}
 end
+
 
 function SeriesModel(composite::T) where T
     funs = get_unique_state_functions(composite, :series)
     funs_flat = flatten_repeated_functions(funs)
     N = length(composite)
-    SeriesModel{N, T, typeof(funs_flat)}(composite, funs_flat,  Tuple(1:N))
+    SeriesModel{N, T, typeof(funs_flat)}(composite, funs_flat,  MVector{N,Int}(1:N))
 end
-update_numbers(s::SeriesModel{N, T, F}, num::NTuple) where {N, T, F} = SeriesModel{N, T, F}(s.children, s.funs, num)
+#update_numbers(s::SeriesModel{N, T, F}, num::NTuple) where {N, T, F} = SeriesModel{N, T, F}(s.children, s.funs, num)
 
 SeriesModel(x::Vararg{Any, N}) where N = SeriesModel(tuple(x)...)
 Base.length(x::SeriesModel) = length(x.children)
@@ -46,15 +47,15 @@ end
 struct ParallelModel{N, T, F} <: AbstractCompositeModel # not 100% about the subtyping here, lets see
     siblings::T # horizontal branching
     funs::F
-    num::NTuple{N, Int}
+    num::MVector{N, Int}
 end
 function ParallelModel(composite::T) where T
     funs = get_unique_state_functions(composite, :parallel)
     funs_flat = flatten_repeated_functions(funs)
     N = length(composite)
-    ParallelModel{N, T, typeof(funs_flat)}(composite, funs_flat, Tuple(1:N))
+    ParallelModel{N, T, typeof(funs_flat)}(composite, funs_flat, MVector{N,Int}(1:N))
 end
-update_numbers(s::ParallelModel{N, T, F}, num::NTuple) where {N, T, F} = ParallelModel{N, T, F}(s.siblings, s.funs, num)
+#update_numbers(s::ParallelModel{N, T, F}, num::NTuple) where {N, T, F} = ParallelModel{N, T, F}(s.siblings, s.funs, num)
 
 ParallelModel(x::Vararg{Any, N}) where N = ParallelModel(tuple(x)...)
 Base.length(x::ParallelModel) = length(x.siblings)
@@ -213,3 +214,18 @@ end
 @inline parallel_state_functions(::SeriesModel) = (compute_strain_rate, compute_stress,)
 @inline series_state_functions(::ParallelModel) = (compute_strain_rate, compute_stress,)
 @inline series_state_functions(r::SeriesModel) = series_state_functions(r.children)
+
+
+# recursively updates the numbers of the elements
+function update_global_numbers(s::Union{SeriesModel{N},ParallelModel{N}}, start=0) where N
+    s.num .= s.num .+ start
+    start = maximum(s.num)
+    for i=1:N
+       start = update_global_numbers(s[i], start)
+    end
+    return start
+end
+
+function update_global_numbers(s::AbstractRheology, start=0)
+    return start
+end
