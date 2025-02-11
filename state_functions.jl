@@ -23,7 +23,7 @@ end
 # compute_volumetric_strain_rate methods
 @inline function compute_lambda(r::DruckerPrager; τ = 0, λ = 0, P = 0, kwargs...) 
     F = compute_F(r, τ, P)
-    (F>0) * F - λ
+    F * (F > 0) - λ
 end
 @inline compute_lambda(r::AbstractRheology; kwargs...) = 0 # for any other rheology that doesnt need this method
 # splatter wrapper

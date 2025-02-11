@@ -1,0 +1,1 @@
+number_strain_rate_components(composite)

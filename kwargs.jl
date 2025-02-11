@@ -74,7 +74,6 @@ end
     end
 end
 
-
 function split_args(args, statefuns::NTuple{N, Any}) where N
     # split args into differentiable and not differentiable
     dummy = differentiable_kwargs(statefuns)
