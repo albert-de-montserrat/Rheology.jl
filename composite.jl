@@ -32,6 +32,12 @@ struct SeriesModel{N, T, F} <: AbstractCompositeModel # not 100% about the subty
     end
 end
 SeriesModel(x::Vararg{Any, N}) where N = SeriesModel(tuple(x)...)
+Base.length(x::SeriesModel) = length(x.children)
+Base.getindex(x::SeriesModel, i) = x.children[i]
+function Base.iterate(c::SeriesModel, state = 0)
+    state >= nfields(c) && return
+    return Base.getfield(c, state+1), state+1
+end
 
 struct ParallelModel{N, T, F} <: AbstractCompositeModel # not 100% about the subtyping here, lets see
     siblings::T # horizontal branching
@@ -44,6 +50,12 @@ struct ParallelModel{N, T, F} <: AbstractCompositeModel # not 100% about the sub
     end
 end
 ParallelModel(x::Vararg{Any, N}) where N = ParallelModel(tuple(x)...)
+Base.length(x::ParallelModel) = length(x.siblings)
+Base.getindex(x::ParallelModel, i) = x.siblings[i]
+function Base.iterate(c::ParallelModel, state = 0)
+    state >= nfields(c) && return
+    return Base.getfield(c, state+1), state+1
+end
 
 number_strain_rate_components(::T) where T = 0
 number_strain_rate_components(::CompositeModel{NStrain, NStress}) where {NStrain, NStress} = NStrain
@@ -106,7 +118,7 @@ end
              n = maximum(maximum.(last.(numel)))
         elseif isa(s.children[i], SeriesModel) 
             numel  = number_elements1(s.children[i], start=n)
-            number = (number..., numel...)
+            number = (number..., (numel...,))
             n = maximum(maximum.(last.(numel)))
          else
              number = (number..., n)
@@ -129,7 +141,7 @@ function number_elements1(s::ParallelModel{N}; start::Int64=1)  where N
             n = maximum(maximum.(last.(numel)))
         elseif isa(s.siblings[i], SeriesModel) 
             numel  = number_elements1(s.siblings[i], start=n)
-            number = (number..., numel...)
+            number = (number..., (numel...,))
             n = maximum(maximum.(last.(numel)))
         else
             number = (number..., n)
@@ -139,54 +151,6 @@ function number_elements1(s::ParallelModel{N}; start::Int64=1)  where N
     return number
 end
 number_elements1(c::CompositeModel) = number_elements1(c.components, start=1)
-
-#=
-function number_elements2(s::SeriesModel{N}; start::Int64=1)  where N
-    # this allocates but only needs to be done once...
-    number = ()
-    n = start-1;
-    for i=1:N
-        n += 1
-        if isa(s.children[i], ParallelModel) 
-        ##    # recursively deal with series (or parallel) elements
-            numel  = number_elements2(s.children[i], start=n+1)
-            number = (number..., (n,numel))
-            n = maximum(maximum.(last.(numel)))
-        elseif isa(s.children[i], SeriesModel) 
-            numel  = number_elements2(s.children[i], start=n)
-            number = (number..., numel...)
-            n = maximum(maximum.(last.(numel)))
-        else
-            number = (number..., n)
-        end
-    end
-  
-    return number
-end
-
-function number_elements2(s::ParallelModel{N}; start::Int64=1)  where N
-    # this allocates but only needs to be done once...
-    number = ()
-    n = start-1;
-    for i=1:N
-        n += 1
-        if isa(s.siblings[i], SeriesModel) 
-            # recursively deal with series (or parallel) elements
-            numel = number_elements2(s.siblings[i], start=n+1)
-            number = (number..., (n,numel))
-            n = maximum(maximum.(last.(numel)))
-        elseif isa(s.children[i], ParallelModel) 
-            numel  = number_elements2(s.children[i], start=n)
-            number = (number..., numel...)
-            n = maximum(maximum.(last.(numel)))
-        else
-            number = (number..., n)
-        end
-    end
-  
-    return number
-end
-=#
 
 global_numbering(::NTuple{N, Int}) where N = ntuple(i -> i, Val(N))
 

@@ -33,10 +33,12 @@ DruckerPrager(args...) = DruckerPrager(promote(args...)...)
 @inline series_state_functions(::DruckerPrager) = (compute_strain_rate, compute_lambda)
 #@inline series_state_functions(r::Series) = series_state_functions(r.elements)
 
+
 @inline series_state_functions(::AbstractRheology) = error("Rheology not defined")
 # handle tuples
 @inline series_state_functions(r::NTuple{N, AbstractRheology}) where N = series_state_functions(first(r))..., series_state_functions(Base.tail(r))...
   
+
 @inline function series_state_functions(r::NTuple{N, AbstractRheology}, number::Tuple) where N 
     # this can likely be improved. What it does is to give back a list with computational
     # functions for the whole series elements. Each element has a strain rate function, 
@@ -55,7 +57,13 @@ DruckerPrager(args...) = DruckerPrager(promote(args...)...)
     for i=1:N
         for j=1:length(rr[i])
             n += 1
-            num[n] = number[i]
+            if isa(number[i], Int)
+                num[n] = number[i]
+            else
+                num[n] = number[i][1]
+            end
+
+
         end
     end
     # remove the ones that are called "compute_strain_rate", but keep the rest
@@ -72,6 +80,46 @@ DruckerPrager(args...) = DruckerPrager(promote(args...)...)
     return out_state_funs, out_number
 end
 
+@inline function series_state_functions1(r::SeriesModel{N}, numel::NTuple{N,Any}) where N 
+    numfuns = ()
+    statefuns = ()
+    for i=1:N
+        fns, nums = series_state_functions1(r[i], numel[i])
+        statefuns = (statefuns..., fns...)
+        numfuns = (numfuns..., nums...)
+    end
+    
+    # At this stage we have a flattened list with all elements
+    # It also includes "compute_strain_rate" and "compute_volumetric_strain_rate"
+    # which need to be defined for all 
+    isvolum = any(statefuns .== compute_volumetric_strain_rate)
+    indall = findall((statefuns .!= compute_strain_rate) .&& (statefuns .!= compute_volumetric_strain_rate))
+    if isvolum
+        statefuns = (compute_strain_rate, compute_volumetric_strain_rate, statefuns[indall]...)
+        numfuns = (0,0, numfuns[indall]...)
+    else
+        statefuns = (compute_strain_rate, statefuns[indall]...)
+        numfuns = (0, numfuns[indall]...)
+    end
+
+    return statefuns, numfuns
+end
+
+@inline function series_state_functions1(r::ParallelModel{N}, numel::Tuple{Int,NTuple{N,Any}}) where N 
+    statefuns, numfuns = series_state_functions1(r, numel[1])
+    for i=1:N
+        fns, nums = series_state_functions1(r[i], numel[2][i])
+        statefuns = (statefuns..., fns...)
+        numfuns = (numfuns..., nums...)
+    end
+    return statefuns, numfuns
+end
+
+@inline function series_state_functions1(r::AbstractRheology, number::Int64)
+    out = series_state_functions(r)
+    return out,  (fill(number,length(out))...,)
+end
+
 @inline series_state_functions(::Tuple{})= ()
 
 ## METHODS FOR PARALLEL MODELS
@@ -81,6 +129,8 @@ end
 @inline parallel_state_functions(::Elasticity) = compute_stress, compute_pressure
 @inline parallel_state_functions(::DruckerPrager) = compute_stress, compute_pressure, compute_lambda, compute_plastic_strain_rate, compute_volumetric_plastic_strain_rate
 @inline parallel_state_functions(::AbstractRheology) = error("Rheology not defined")
+
+
 # handle tuples
 @inline parallel_state_functions(r::NTuple{N, AbstractRheology}) where N = parallel_state_functions(first(r))..., parallel_state_functions(Base.tail(r))...
 @inline parallel_state_functions(::Tuple{})= ()

@@ -99,8 +99,8 @@ function number_elements(composite::NTuple{N, AbstractRheology}; start::Int64=1)
         n += 1
         if isa(composite[i], Series) || isa(composite[i], Parallel)
             # recursively deal with series (or parallel) elements
-            numel = number_elements(composite[i].elements, start=n)
-            number = (number..., numel)
+            numel = number_elements(composite[i].elements, start=n+1)
+            number = (number..., (n,numel))
             n = maximum(numel)
         else
             number = (number..., n)

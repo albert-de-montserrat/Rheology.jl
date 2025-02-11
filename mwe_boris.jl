@@ -92,8 +92,9 @@ elastic  = Elasticity(1e10, 1e100) # im making up numbers
 drucker  = DruckerPrager(1e6, 30, 0) # C, ϕ, ψ
 
 s1 = SeriesModel(viscous, drucker, drucker)
-p1 = ParallelModel(viscous, drucker, elastic)
-c1 = CompositeModel(SeriesModel(s1, p1))
+p1 = ParallelModel(viscous, powerlaw)
+s5 = SeriesModel(s1, p1)
+c1 = CompositeModel(s5)
 c0 = CompositeModel(s1)
 
 p2 = ParallelModel(viscous, powerlaw)
@@ -111,6 +112,18 @@ statefuns, statenums = series_state_functions(s1.children, numel)
 args_diff = differentiable_kwargs(statefuns, statenums)
 
 # do the same for a parallel case:
-numel = number_elements(p1) 
+numel = number_elements1(p1) 
 statefuns, statenums = parallel_state_functions(p1.siblings, numel)
 args_diff = differentiable_kwargs(statefuns, statenums)
+
+# WIP: combinations of series and parallel
+#numel = number_elements1(c1) 
+#statefuns, statenums = series_state_functions(c1.components, numel)
+
+# This now gives the expected result:
+numel = number_elements1(s5)
+statefuns, statenums = series_state_functions1(s5, numel)
+
+
+numel = number_elements1(s1)
+statefuns, statenums = series_state_functions1(s1, numel)
