@@ -30,24 +30,23 @@ DruckerPrager(args...) = DruckerPrager(promote(args...)...)
 @inline series_state_functions(::DruckerPrager) = compute_strain_rate, compute_volumetric_strain_rate, compute_lambda
 @inline series_state_functions(::DruckerPrager) = (compute_strain_rate, compute_lambda)
 #@inline series_state_functions(r::Series) = series_state_functions(r.elements)
-
-
 @inline series_state_functions(::AbstractRheology) = error("Rheology not defined")
 # handle tuples
 @inline series_state_functions(r::NTuple{N, AbstractRheology}) where N = series_state_functions(first(r))..., series_state_functions(Base.tail(r))...
-  
 
-#@inline series_state_functions3(s::AbstractRheology,num::Int) = series_state_functions(s), (fill(num, length(series_state_functions(s)))...,)
 
+# returns the flattened statefunctions along with NTuples with global & local element numbers
 function series_state_functions(r::NTuple{N, AbstractRheology}, num::MVector{N,Int}) where N 
     statefuns = (series_state_functions(first(r))...,  series_state_functions(Base.tail(r))...)
     
     len = ntuple(i->length(series_state_functions(r[i])),N)
-    statenum = ntuple(i->val(i,len,num),Val(sum(len)))
+    statenum    = ntuple(i->val(i,len,num),Val(sum(len)))
+    stateelements = ntuple(i->val_element(i,len),Val(sum(len)))
 
-    return statefuns, statenum
+    return statefuns, statenum, stateelements
 end
 
+# Global number
 function val(i::Int64,len::NTuple{N,Int},num::MVector{N,Int}) where N
     n,v = 1, 0
     for j=1:N, k=1:len[j]
@@ -59,6 +58,17 @@ function val(i::Int64,len::NTuple{N,Int},num::MVector{N,Int}) where N
     return v
 end
 
+# local number
+function val_element(i::Int64,len::NTuple{N,Int}) where N
+    n,v = 1, 0
+    for j=1:N, k=1:len[j]
+        if n == i
+            v = j
+        end
+        n += 1
+    end
+    return v
+end
 
 @inline series_state_functions(::Tuple{})= ()
 
@@ -80,10 +90,28 @@ function parallel_state_functions(r::NTuple{N, AbstractRheology}, num::MVector{N
     
     len = ntuple(i->length(parallel_state_functions(r[i])),N)
     statenum = ntuple(i->val(i,len,num),Val(sum(len)))
+    stateelements = ntuple(i->val_element(i,len),Val(sum(len)))
 
-    return statefuns, statenum
+    return statefuns, statenum, stateelements
 end
 
+
+
+#####
+# helper functions
+
+# Determine if a rheology requires volumetric deformation
+isvolumetric(::AbstractRheology) = false
+isvolumetric(::Elasticity) = true           # we can later add a case that is false if ν==0.5 
+function isvolumetric(r::DruckerPrager) 
+    if r.ψ == 0
+        return false
+    else
+        return true
+    end
+end
+isvolumetric(r::SeriesModel) = any(isvolumetric.(r.children))
+isvolumetric(r::ParallelModel) = any(isvolumetric.(r.siblings))
 
 #####
 

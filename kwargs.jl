@@ -30,20 +30,14 @@ end
 function attach_nums(x::NamedTuple, n::Int64)
     # This allocates - to be fixed!
     k = keys(x)
-    v = values(x)
-    
-    k_string = String.(k)    
-    k_new = ()
-    for s in k_string
-        if n>0 #s != "τ" && s != "P" && s != "ε" && s != "θ"
-            # we may have to distinguish between parallel & serial cases here
-            k_new = (k_new..., Symbol(s*"_$n"))
-        else
-            k_new = (k_new..., Symbol(s))
-        end
+    if n>0
+        k_new = string.(keys(x)).*"_$n"
+        N = length(x)
+        k1 = ntuple(i-> Symbol(k_new[i]) , Val(N))
+    else
+        k1 = k
     end
-    
-    return NamedTuple{k_new}(v)
+    return NamedTuple{ k1}(values(x))
 end
 
 @inline differentiable_kwargs(::Type{T}, ::typeof(compute_strain_rate), i::Int64)                    where T = attach_nums((; τ = zero(T),), i)

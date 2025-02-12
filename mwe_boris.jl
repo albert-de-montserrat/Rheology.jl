@@ -189,14 +189,58 @@ args_diff = differentiable_kwargs(statefuns, statenums)
 =#
 
 # simple viscous + powerlaw
-p         = ParallelModel(viscous, elastic)
-s         = SeriesModel(viscous, elastic, p)
+#p         = ParallelModel(viscous, elastic)
+p         = ParallelModel(viscous, viscous)
+
+#s         = SeriesModel(viscous, elastic, p)
+s         = SeriesModel(viscous, p)
+#s         = SeriesModel(viscous, ParallelModel(SeriesModel(viscous,viscous), viscous))
+
+c         = CompositeModel(s)
+
+# get differentiable and residual args with 
+diff_args, res_args  = get_all_kwargs(s) 
+
+
+
+
+#=
+statefuns, statenums = series_state_functions(c.components)
+
+ind = findall(statefuns .== compute_strain_rate .|| statefuns .== compute_volumetric_strain_rate)
+statenumsvec = [statenums...]
+statenumsvec[ind] .= 1 #c.components.n[1]
+
+# find the ParallelElements - we do keep them
+
+statenums = Tuple(statenumsvec)
+
+differentiable_kwargs(statefuns, statenums)
+=#
+
+
+
+
+# The strainrate is required for this element
+
+
+#=
+# example 1, paragraph 6
+p         = ParallelModel(viscous, powerlaw)
+s         = SeriesModel(elastic, p)
 c         = CompositeModel(s)
 statefuns, statenums = series_state_functions(c.components)
+
+
+# example 2, paragraph 6
+s31       = SeriesModel(viscous, elastic)     
+p3        = ParallelModel(s31, viscous)
+s         = SeriesModel(viscous, elastic, p3)
+c         = CompositeModel(s)
+statefuns, statenums = series_state_functions(c.components)
+=#
 
 
 #numel   = number_elements1(c)
 
 #statefuns, statenums = series_state_functions1(s, numel)
-
-
