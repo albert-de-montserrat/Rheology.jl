@@ -143,7 +143,7 @@ $
   tau = sum_i^n tau_i
 $
 
-== Example 2.1: Solving for stress and pressure
+== Example 2.1: Solving for stress and pressure (unnecessarily spelled-out example)
 
 Components: linear viscous + power law + linear elasticity
 
