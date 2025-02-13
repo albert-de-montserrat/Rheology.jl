@@ -2,6 +2,7 @@
 
 // #show: equate.with(breakable: true, sub-numbering: true)
 #set math.equation(numbering: "(1.1)")
+#set heading(numbering: "1.1")
 
 = Rheology types
 
@@ -43,26 +44,13 @@ $
 
 Volumetric strain rate:
 $
-  dot(theta) = 1 / K (P-P^o) / (Delta t)
+  theta = 1 / K (P-P^o) / (Delta t)
 $
 
 Pressure:
 $
   P = theta K Delta t + P^o  
 $
-
-== Linear incompressible elasticity
-
-Strain rate:
-$
-  dot(epsilon) = 1 / (2 G)  (partial tau) / (partial t) approx 1 / (2 G)  (tau - tau^o) / (Delta t)
-$
-
-Stress:
-$
-tau = 2 G Delta t dot(epsilon) + tau^o
-$
-
 
 == Drucker-Prager
 Plastic strain rate:
@@ -82,13 +70,7 @@ $
 
 Volumetric plastic strain rate
 $
-  dot(theta) = dot(lambda) (partial Q) / (partial P)
-$
-
-Stress:
-We have to use the local stress to evaluate the yield function and plastic strainrate components
-$
-  tau_("II") = tau_("II")^("pl")
+  theta = dot(lambda) (partial Q) / (partial P)
 $
 
 = Exclusively series elements
@@ -114,11 +96,11 @@ $<ex1:strain>
 
 and
 $
-  dot(theta) = dot(theta)^("viscous") + dot(theta)^("power law") + dot(theta)^("elasticity") =
+  theta = theta^("viscous") + theta^("power law") + theta^("elasticity") =
   0 + 0 + 1 / K (P-P^o) / (Delta t)
 $<ex1:vol>
 
-We need to solve for both $tau$ and $P$. To build the Newton-Raphson solver we need the residual functions // @ref{ex1:strain} and @ref{ex1:vol}
+We need to solve for both $epsilon$ and $P$. To build the Newton-Raphson solver we need the residual functions // @ref{ex1:strain} and @ref{ex1:vol}
 
 $ r = mat(
   r(tau);
@@ -146,6 +128,9 @@ mat(
 ) 
 $
 
+=== What do we need to generate this code?
+  + Get all the unique state functions and variables for the parallel case
+
 = Exclusively parallel elements
 
 Strain rate  is equal for all components 
@@ -158,7 +143,7 @@ $
   tau = sum_i^n tau_i
 $
 
-== Example 2: Solving for stress and pressure
+== Example 2.1: Solving for stress and pressure
 
 Components: linear viscous + power law + linear elasticity
 
@@ -269,4 +254,41 @@ For one simple parallel element we need:
     + About residual functions: we just need *NOT* to flatten the state functions for the parallel element.
     + About local state variables: we "dont really care" about them, but we can store them in a _Tuple_ of NamedTuple matching the state functions, so that we can do pattern matching using the _kwargs_ trick. 
 
+== Example 2.2: Solving for strain rate and volumetric strain rate
 
+Components, same as in *Example 2.1*: linear viscous + power law + linear elasticity
+
+$
+  tau = tau^("viscous") + tau^("power law") + tau^("elasticity") = 2eta dot(epsilon) + 2eta_o dot(epsilon)^n + 2G Delta t dot(epsilon) + tau^o
+$
+$
+  P = P^("elasticity") = theta K Delta t + P^o
+$
+
+So that we have
+$
+  x = mat(
+    dot(epsilon);
+    theta;
+  )
+$
+$
+  r = mat(
+    r(dot(epsilon));
+    r(theta);
+  ) =
+  mat(
+    2eta dot(epsilon) + 2eta_o dot(epsilon)^n + 2G Delta t dot(epsilon) + tau^o - tau;
+    theta K Delta t + P^o - P;
+  )
+$
+$
+  J = mat(
+    2eta + 2eta_o n dot(epsilon)^(n-1) + 2G Delta t, 0;
+    0, K Delta t;
+  )
+$
+
+=== What do we need to generate this code?
+Same as in the series case:
+  + Get all the unique state functions and variables for the parallel case
