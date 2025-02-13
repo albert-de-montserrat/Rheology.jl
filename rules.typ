@@ -85,7 +85,7 @@ $
   tau = tau_1 = dots.h = tau_n
 $
 
-== Example 1: 
+== Example 1.1: 
 
 Components: linear viscous + power law + linear elasticity
 
@@ -131,6 +131,73 @@ $
 === What do we need to generate this code?
   + Get all the unique state functions and variables for the parallel case
 
+
+== Example 1.2: 
+
+This is the same as *Example 1.1*, but spelled out for each component. This is particularly useful in cases where you have a rheology for which you can formulate an expression for the stress of the element (as a function of strain rate), but not easily an expression of strain rate versus stress (this is admittedly not the case in this example, but it serves as an illustration):
+
+Components: linear viscous + power law + linear elasticity
+The stress of all the elements is equal
+$
+  tau = tau^("viscous") = tau^("power law") = tau^("elasticity")
+$
+$
+  dot(epsilon) = dot(epsilon)^("viscous") + dot(epsilon)^("power law") + dot(epsilon)^("elasticity") 
+$<ex1:strain_1>
+
+and
+$
+  theta = 0 + 0 + theta^("elasticity") 
+$<ex1:vol>
+
+$
+  P = P^("elasticity") 
+$<ex1:vol>
+
+
+We need to solve for both $epsilon$ and $P$. To build the Newton-Raphson solver we need the residual functions // @ref{ex1:strain} and @ref{ex1:vol}
+
+$ x = mat(
+  tau;
+  epsilon^("viscous");
+  epsilon^("powerlaw");
+  epsilon^("elastic");
+  P;
+  theta^("elasticity") 
+) 
+$
+and: 
+$ r = mat(
+  r(tau);
+  r(dot(epsilon)^("viscous"));
+  r(dot(epsilon)^("powerlaw"));
+  r(dot(epsilon)^("elasticity"));
+  r(P);
+  r(theta^("elasticity"))
+) = 
+mat(
+  - dot(epsilon) + dot(epsilon)^("viscous") + dot(epsilon)^("power law") + dot(epsilon)^("elasticity");
+  2 eta dot(epsilon)^("viscous") - tau; 
+  (2 eta_o dot(epsilon)^("power law"))^(1/n) - tau;
+  2 G Delta t dot(epsilon)^("elasticity") + tau^o - tau;
+  -theta + theta^("elasticity");
+  K Delta t theta^("elasticity")  + P^o - P 
+) 
+$
+This results in the following jacobian:
+$ 
+J = 
+mat( 0 , 1, 1, 1, 0, 0;
+     -1, 2 eta, 0, 0, 0, 0;
+     -1, 0, (2 eta_o dot(epsilon)^("power law"))^(1/n - 1)/n, 0, 0, 0;
+     -1, 0, 0, 2 G Delta t, 0, 0;
+     0, 0, 0, 0, 1, 0;
+     0, 0, 0, 0, 0, K Delta t;  
+) 
+$
+Note that this jacobian does not require a summation to specify each of its elements. 
+Ideally both methods are implemented in the same code and we can choose what we want to use for a given rheology. That would also allow evaluating the speed of the different methods (smaller and larger jacobian).
+
 = Exclusively parallel elements
 
 Strain rate  is equal for all components 
@@ -150,6 +217,9 @@ Components: linear viscous + power law + linear elasticity
 $
   dot(epsilon) = dot(epsilon)^("viscous") = dot(epsilon)^("power law") = dot(epsilon)^("elasticity")
 $
+$
+  tau = tau^("viscous") + tau^("power law") + tau^("elasticity")
+$
 
 $
   dot(epsilon)^("viscous")    = dot(epsilon) = 1 / (2 eta)tau^("viscous") = 1 / (2 eta)tau_1
@@ -158,7 +228,7 @@ $
    dot(epsilon)^("power law")  = dot(epsilon) = 1 / (2 eta_o)(tau^("power law"))^n = 1 / (2 eta_o)tau_2^n
 $ 
 $
-  dot(epsilon)^("elasticity") = dot(epsilon) = 1 / (2 G)  (tau^("elasticity") - tau^o) / (Delta t) = 1 / (2 G) (tau_3 - tau^o) / (Delta t) \
+  dot(epsilon)^("elasticity") = dot(epsilon) = 1 / (2 G)  (tau^("elasticity") - tau^o) / (Delta t) = 1 / (2 G) (tau_3 - tau^o_3) / (Delta t) \
 $
 and $tau = tau_1 + tau_2 + tau_3$
 
@@ -181,10 +251,22 @@ $
     tau - tau_1 - tau_2 - tau_3;
     1 / (2 eta)tau_1 - dot(epsilon);
     1 / (2 eta_o)tau_2^n - dot(epsilon);
-    1 / (2 G) (tau_3 - tau^o) / (Delta t) - dot(epsilon);
+    1 / (2 G) (tau_3 - tau^o_3) / (Delta t) - dot(epsilon);
   )
 $
-and 
+
+Alternatively:
+$
+  r_1 = mat(
+    r(tau);
+  ) = 
+  mat(
+    -tau +  2 eta dot(epsilon) +  2 eta_o dot(epsilon)^(1/n) + 2 G Delta t dot(epsilon) + tau^o_3 ;
+  )
+$
+
+
+  and 
 $
   J_1 = mat(
     1, 0, 0, 0;
