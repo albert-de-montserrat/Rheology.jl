@@ -43,13 +43,26 @@ $
 
 Volumetric strain rate:
 $
-  theta = 1 / K (P-P^o) / (Delta t)
+  dot(theta) = 1 / K (P-P^o) / (Delta t)
 $
 
 Pressure:
 $
   P = theta K Delta t + P^o  
 $
+
+== Linear incompressible elasticity
+
+Strain rate:
+$
+  dot(epsilon) = 1 / (2 G)  (partial tau) / (partial t) approx 1 / (2 G)  (tau - tau^o) / (Delta t)
+$
+
+Stress:
+$
+tau = 2 G Delta t dot(epsilon) + tau^o
+$
+
 
 == Drucker-Prager
 Plastic strain rate:
@@ -69,7 +82,13 @@ $
 
 Volumetric plastic strain rate
 $
-  theta = dot(lambda) (partial Q) / (partial P)
+  dot(theta) = dot(lambda) (partial Q) / (partial P)
+$
+
+Stress:
+We have to use the local stress to evaluate the yield function and plastic strainrate components
+$
+  tau_("II") = tau_("II")^("pl")
 $
 
 = Exclusively series elements
@@ -95,11 +114,11 @@ $<ex1:strain>
 
 and
 $
-  theta = theta^("viscous") + theta^("power law") + theta^("elasticity") =
+  dot(theta) = dot(theta)^("viscous") + dot(theta)^("power law") + dot(theta)^("elasticity") =
   0 + 0 + 1 / K (P-P^o) / (Delta t)
 $<ex1:vol>
 
-We need to solve for both $epsilon$ and $P$. To build the Newton-Raphson solver we need the residual functions // @ref{ex1:strain} and @ref{ex1:vol}
+We need to solve for both $tau$ and $P$. To build the Newton-Raphson solver we need the residual functions // @ref{ex1:strain} and @ref{ex1:vol}
 
 $ r = mat(
   r(tau);
