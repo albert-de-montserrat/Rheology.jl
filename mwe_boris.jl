@@ -244,3 +244,11 @@ statefuns, statenums = series_state_functions(c.components)
 #numel   = number_elements1(c)
 
 #statefuns, statenums = series_state_functions1(s, numel)
+
+
+elastic_i = IncompressibleElasticity(1e10)
+s31       = SeriesModel(viscous, elastic_i)     
+p3        = ParallelModel(s31, viscous)
+s         = SeriesModel(viscous, elastic_i, p3)
+c         = CompositeModel(s)
+ss        = c.components

@@ -6,16 +6,12 @@ abstract type AbstractCompositeModel <: AbstractRheology  end
 @inline series_state_functions(::AbstractCompositeModel)= ()
 @inline parallel_state_functions(::AbstractCompositeModel)= ()
 
-#struct CompositeModel{Nstrain, Nstress, T, NUM} <: AbstractCompositeModel
 struct CompositeModel{Nstrain, Nstress, T} <: AbstractCompositeModel
     components::T
-   # number::NUM
 end
 function CompositeModel(composite::T) where T
     Nstrain = number_strain_rate_components(composite)
     Nstress = number_stress_components(composite)
-    #Num     = number_elements(composite)
-    #new{Nstrain, Nstress, T, typeof(Num)}(composite, Num)
     return CompositeModel{Nstrain, Nstress, T}(composite)
 end
 CompositeModel(x::Vararg{Any, N}) where N = CompositeModel(tuple(x)...)
@@ -24,7 +20,8 @@ struct SeriesModel{N, T, F} <: AbstractCompositeModel # not 100% about the subty
     children::T # vertical stacking
     funs::F
     num::MVector{N, Int}
-    n::MVector{1, Int}      # number of this ParallelModel
+    n::MVector{1, Int}       # number of this ParallelModel
+    parent::MVector{1, Int}  # number of the parent Series/Parallel element
 end
 
 
@@ -32,7 +29,7 @@ function SeriesModel(composite::T) where T
     funs = get_unique_state_functions(composite, :series)
     funs_flat = flatten_repeated_functions(funs)
     N = length(composite)
-    SeriesModel{N, T, typeof(funs_flat)}(composite, funs_flat,  MVector{N,Int}(1:N), MVector{1,Int}(0))
+    SeriesModel{N, T, typeof(funs_flat)}(composite, funs_flat,  MVector{N,Int}(1:N), MVector{1,Int}(0), MVector{1,Int}(0))
 end
 #update_numbers(s::SeriesModel{N, T, F}, num::NTuple) where {N, T, F} = SeriesModel{N, T, F}(s.children, s.funs, num)
 isseries(x::AbstractRheology) = false
@@ -62,12 +59,13 @@ struct ParallelModel{N, T, F} <: AbstractCompositeModel # not 100% about the sub
     funs::F
     num::MVector{N, Int}    # numbers of the rheological elements
     n::MVector{1, Int}      # number of this ParallelModel
+    parent::MVector{1, Int}  # number of the parent Series/Parallel element
 end
 function ParallelModel(composite::T) where T
     funs = get_unique_state_functions(composite, :parallel)
     funs_flat = flatten_repeated_functions(funs)
     N = length(composite)
-    ParallelModel{N, T, typeof(funs_flat)}(composite, funs_flat, MVector{N,Int}(1:N), MVector{1,Int}(0))
+    ParallelModel{N, T, typeof(funs_flat)}(composite, funs_flat, MVector{N,Int}(1:N), MVector{1,Int}(0), MVector{1,Int}(0))
 end
 
 ParallelModel(x::Vararg{Any, N}) where N = ParallelModel(tuple(x)...)
@@ -234,18 +232,20 @@ end
 
 
 # recursively updates the numbers of the elements
-function update_global_numbers(s::Union{SeriesModel{N},ParallelModel{N}}, start=0) where N
-    s.num .= s.num .+ start
-    s.n[1] = start
-    start = maximum(s.num)
+function update_global_numbers(s::Union{SeriesModel{N},ParallelModel{N}}, start=0, parent=0) where N
+    s.num       .= s.num .+ start
+    s.n[1]       = start
+    s.parent[1]  = parent
+    parent       = start
     for i=1:N
-       start = update_global_numbers(s[i], start)
+       start, _ = update_global_numbers(s[i], s.num[i], parent)
     end
-    return start
+   
+    return start, parent
 end
 
-function update_global_numbers(s::AbstractRheology, start=0)
-    return start
+function update_global_numbers(s::AbstractRheology, start=0, parent=0)
+    return start, parent
 end
 
 

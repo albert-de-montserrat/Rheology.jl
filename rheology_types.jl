@@ -13,6 +13,10 @@ struct Elasticity{T} <: AbstractRheology
     K::T
 end
 
+struct IncompressibleElasticity{T} <: AbstractRheology
+    G::T
+end
+
 struct DruckerPrager{T} <: AbstractPlasticity
     C::T 
     ϕ::T # in degrees for now
@@ -27,6 +31,7 @@ DruckerPrager(args...) = DruckerPrager(promote(args...)...)
 @inline series_state_functions(::LinearViscosity) = (compute_strain_rate,)
 @inline series_state_functions(::PowerLawViscosity) = (compute_strain_rate,)
 @inline series_state_functions(::Elasticity) = compute_strain_rate, compute_volumetric_strain_rate
+@inline series_state_functions(::IncompressibleElasticity) = (compute_strain_rate, )
 @inline series_state_functions(::DruckerPrager) = compute_strain_rate, compute_volumetric_strain_rate, compute_lambda
 @inline series_state_functions(::DruckerPrager) = (compute_strain_rate, compute_lambda)
 #@inline series_state_functions(r::Series) = series_state_functions(r.elements)
@@ -77,6 +82,7 @@ end
 @inline parallel_state_functions(::LinearViscosity) = (compute_stress,)
 @inline parallel_state_functions(::PowerLawViscosity) = (compute_stress,)
 @inline parallel_state_functions(::Elasticity) = compute_stress, compute_pressure
+@inline parallel_state_functions(::IncompressibleElasticity) = (compute_stress, )
 @inline parallel_state_functions(::DruckerPrager) = compute_stress, compute_pressure, compute_lambda, compute_plastic_strain_rate, compute_volumetric_plastic_strain_rate
 @inline parallel_state_functions(::AbstractRheology) = error("Rheology not defined")
 
