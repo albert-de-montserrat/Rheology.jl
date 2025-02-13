@@ -128,53 +128,6 @@ end
 
 # Boris stuff (thus likely needs rewriting)
 
- function number_elements1(s::SeriesModel{N}; start::Int64=1)  where N
-     # this allocates but only needs to be done once...
-     number = ()
-     n = start-1;
-     for i=1:N
-         n += 1
-         if isa(s.children[i], ParallelModel) 
-         ##    # recursively deal with series (or parallel) elements
-             numel  = number_elements1(s.children[i], start=n+1)
-             number = (number..., (n,numel))
-             n = maximum(maximum.(last.(numel)))
-        elseif isa(s.children[i], SeriesModel) 
-            numel  = number_elements1(s.children[i], start=n)
-            number = (number..., (numel...,))
-            n = maximum(maximum.(last.(numel)))
-         else
-             number = (number..., n)
-         end
-     end
-   
-     return number
- end
-
-function number_elements1(s::ParallelModel{N}; start::Int64=1)  where N
-    # this allocates but only needs to be done once...
-    number = ()
-    n = start-1;
-    for i=1:N
-        n += 1
-        if isa(s.siblings[i], SeriesModel) 
-            # recursively deal with series (or parallel) elements
-            numel = number_elements1(s.siblings[i], start=n+1)
-            number = (number..., (n,numel))
-            n = maximum(maximum.(last.(numel)))
-        elseif isa(s.siblings[i], SeriesModel) 
-            numel  = number_elements1(s.siblings[i], start=n)
-            number = (number..., (numel...,))
-            n = maximum(maximum.(last.(numel)))
-        else
-            number = (number..., n)
-        end
-    end
-  
-    return number
-end
-number_elements1(c::CompositeModel) = number_elements1(c.components, start=1)
-
 global_numbering(::NTuple{N, Int}) where N = ntuple(i -> i, Val(N))
 
 function global_numbering(local_number::Tuple) 
@@ -232,19 +185,21 @@ end
 
 
 # recursively updates the numbers of the elements
-function update_global_numbers(s::Union{SeriesModel{N},ParallelModel{N}}, start=0, parent=0) where N
+function update_global_numbers(s::Union{SeriesModel{N},ParallelModel{N}}, num=0, start=0, parent=0) where N
     s.num       .= s.num .+ start
-    s.n[1]       = start
+    s.n[1]       = num
     s.parent[1]  = parent
     parent       = start
+    start = maximum(s.num)
     for i=1:N
-       start, _ = update_global_numbers(s[i], s.num[i], parent)
+       #s[i].n[1] = i
+       start, _ = update_global_numbers(s[i], s.num[i], start, parent)
     end
    
     return start, parent
 end
 
-function update_global_numbers(s::AbstractRheology, start=0, parent=0)
+function update_global_numbers(s::AbstractRheology, num=0, start=0, parent=0)
     return start, parent
 end
 
@@ -356,7 +311,6 @@ get_all_kwargs(s::Union{SeriesModel,ParallelModel}) = get_all_kwargs(s, get_kwar
 function get_all_kwargs(s::Union{SeriesModel{N,T},ParallelModel{N,T}}, diff_args, res_args) where {N,T}
     for i=1:N
         diff_args1, res_args1 = get_kwargs(s[i])
-        @show diff_args1, res_args1
         diff_args = merge(diff_args, diff_args1)
         res_args  = merge(res_args, res_args1)
     end
