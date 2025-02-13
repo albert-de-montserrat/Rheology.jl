@@ -2,6 +2,7 @@
 @inline compute_strain_rate(r::LinearViscosity; τ = 0, kwargs...) = τ / (2 * r.η)
 @inline compute_strain_rate(r::PowerLawViscosity; τ = 0, kwargs...) = τ^r.n / (2 * r.η)
 @inline compute_strain_rate(r::Elasticity; τ = 0, τ0 = 0, dt = 0, kwargs...) = (τ - τ0) / (2 * r.G * dt)
+@inline compute_strain_rate(r::IncompressibleElasticity; τ = 0, τ0 = 0, dt = 0, kwargs...) = (τ - τ0) / (2 * r.G * dt)
 @inline compute_strain_rate(r::AbstractRheology; kwargs...) = 0 # for any other rheology that doesnt need this method
 @inline function compute_strain_rate(r::DruckerPrager; τ = 0, λ = 0, P_pl = 0, kwargs...) 
     ε_pl = compute_plastic_strain_rate(r::DruckerPrager; τ_pl = τ, λ = λ, P_pl = P_pl, kwargs...)
@@ -41,6 +42,7 @@ compute_Q(r::DruckerPrager, τ, P) = τ - P * sind(r.ψ)
 @inline compute_stress(r::LinearViscosity; ε = 0, kwargs...) = ε * 2 * r.η
 @inline compute_stress(r::PowerLawViscosity; ε = 0, kwargs...) = ε^(1/r.n) * (2 * r.η)^(1/r.n)
 @inline compute_stress(r::Elasticity; ε = 0, τ0 = 0, dt = 0, kwargs...) = τ0 + 2 * r.G * dt * ε
+@inline compute_stress(r::IncompressibleElasticity; ε = 0, τ0 = 0, dt = 0, kwargs...) = τ0 + 2 * r.G * dt * ε
 @inline compute_stress(r::DruckerPrager; τ_pl = 0, kwargs...) = τ_pl
 # splatter wrapper
 @inline compute_stress(r::AbstractRheology, kwargs::NamedTuple) = compute_stress(r; kwargs...)
