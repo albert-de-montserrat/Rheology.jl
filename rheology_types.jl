@@ -3,6 +3,11 @@ struct LinearViscosity{T} <: AbstractRheology
     η::T
 end
 
+# Linear viscous rheology for which we ony define a compute_stress routine
+struct LinearViscosityStress{T} <: AbstractRheology
+    η::T    
+end
+
 struct PowerLawViscosity{T,I} <: AbstractRheology
     η::T
     n::I # DO NOT PROMOTE TO FP BY DEFAULT
@@ -29,6 +34,7 @@ DruckerPrager(args...) = DruckerPrager(promote(args...)...)
 
 # table of methods needed per rheology
 @inline series_state_functions(::LinearViscosity) = (compute_strain_rate,)
+@inline series_state_functions(::LinearViscosityStress) = (compute_stress,)
 @inline series_state_functions(::PowerLawViscosity) = (compute_strain_rate,)
 @inline series_state_functions(::Elasticity) = compute_strain_rate, compute_volumetric_strain_rate
 @inline series_state_functions(::IncompressibleElasticity) = (compute_strain_rate, )
