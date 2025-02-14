@@ -104,12 +104,14 @@ args_state = ntuple(Val(N_reductions)) do i
     end
 end
 
-composite2 = (composite[1], composite[1], composite..., composite[end])
 args_all      = tuple(args_state..., args_local_aug...)
 args_template = tuple(args_reduction..., args_local...)
 
+# this is hardcoded for now...
+composite2 = (composite[1], composite[1], composite..., composite[end])
 f = x -> begin
     args_tmp = generate_args_from_x(x, inds_args_to_x, args_template, args_all)
     eval_state_functions(state_funs, composite2, args_tmp)
 end
 ForwardDiff.jacobian(x -> f(x), x)
+
