@@ -189,7 +189,7 @@ $
 J = 
 mat( 0 , 1, 1, 1, 0, 0;
      -1, 2 eta, 0, 0, 0, 0;
-     -1, 0, (2 eta_o dot(epsilon)^("power law"))^(1/n - 1)/n, 0, 0, 0;
+     -1, 0, (2 eta_o)^(1/n)(dot(epsilon)^("power law"))^(1/n - 1)(1/n), 0, 0, 0;
      -1, 0, 0, 2 G Delta t, 0, 0;
      0, 0, 0, 0, 1, 0;
      0, 0, 0, 0, 0, K Delta t;  
