@@ -147,6 +147,14 @@ eval_state_function(fn::F, r::AbstractRheology, args) where F = fn(r, args)
     end
 end
 
+@generated function eval_state_functions(funs::NTuple{N, Any}, r::NTuple{N, AbstractRheology}, args) where {N}
+    quote
+        @inline 
+        Base.@nexprs $N i -> x_i = eval_state_function(funs[i], r[i], args[i]) 
+        Base.@ncall $N SVector x
+    end
+end
+
 # this is beautiful, gets compiled away
 @generated function flatten_repeated_functions(funs::NTuple{N, Any}) where {N}
     quote

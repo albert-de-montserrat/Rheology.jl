@@ -59,6 +59,8 @@ end
     end
 end
 
+
+
 viscous    = LinearViscosity(5e19)
 powerlaw   = PowerLawViscosity(5e19, 3)
 elastic    = Elasticity(1e10, 1e12) # im making up numbers
@@ -70,8 +72,13 @@ args_other = (; dt = 1e10) # other args that may be needed, non differentiable
 
 funs_local     = parallel_state_functions(composite)
 args_local     = all_differentiable_kwargs(funs_local)
+vars_local     = ntuple(Val(length(args_local))) do i 
+    k = keys(args_local[i])
+    v = (vars[first(k)],)
+    (; zip(k, v)...)
+end
 args_local_aug = ntuple(Val(length(args_local))) do i 
-    merge(args_local0[i], args_other)
+    merge(args_local[i], args_other, vars)
 end
 
 unique_funs_local = flatten_repeated_functions(funs_local)
@@ -86,12 +93,7 @@ inds_args_to_x    = tuple(
     ntuple(x -> (x + N_reductions,), Val(length(funs_local)))...,
 )
 
-# # split args into differentiable and not differentiable
-# args_diff, args_nondiff = split_args(args, statefuns)
-# # rhs of the system of eqs, initial guess
-# x = SA[values(args_diff)...]
-
-local_x = SA[Base.IteratorsMD.flatten(values.(args_local))...]
+local_x = SA[Base.IteratorsMD.flatten(values.(vars_local))...]
 state_x = SA[values(args_solve)...]
 x       = SA[state_x..., local_x...]
 
@@ -102,15 +104,12 @@ args_state = ntuple(Val(N_reductions)) do i
     end
 end
 
-
+composite2 = (composite[1], composite[1], composite..., composite[end])
 args_all      = tuple(args_state..., args_local_aug...)
 args_template = tuple(args_reduction..., args_local...)
 
-i = 1
-compositeᵢ = composite[i]
 f = x -> begin
     args_tmp = generate_args_from_x(x, inds_args_to_x, args_template, args_all)
-    eval_state_functions(state_funs, compositeᵢ, args_tmp)
+    eval_state_functions(state_funs, composite2, args_tmp)
 end
 ForwardDiff.jacobian(x -> f(x), x)
-
