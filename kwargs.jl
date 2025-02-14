@@ -28,7 +28,7 @@ end
 
 # add numbers to the differentiable_kwargs as long as they are not part of the standard series variables
 function attach_nums(x::NamedTuple, n::Int64)
-    # This allocates - to be fixed!
+    # This allocates - to be fixed (if possible at all)!
     k = keys(x)
     if n>0
         k_new = string.(keys(x)).*"_$n"
@@ -40,6 +40,7 @@ function attach_nums(x::NamedTuple, n::Int64)
     return NamedTuple{ k1}(values(x))
 end
 
+#=
 @inline differentiable_kwargs(::Type{T}, ::typeof(compute_strain_rate), i::Int64)                    where T = attach_nums((; τ = zero(T),), i)
 @inline differentiable_kwargs(::Type{T}, ::typeof(compute_volumetric_strain_rate), i::Int64)         where T = attach_nums((; τ = zero(T), P = zero(T)),i)
 @inline differentiable_kwargs(::Type{T}, ::typeof(compute_lambda), i::Int64)                         where T = attach_nums((; λ = zero(T)),i) # τ = zero(T), P = zero(T))
@@ -48,6 +49,7 @@ end
 @inline differentiable_kwargs(::Type{T}, ::typeof(compute_plastic_strain_rate), i::Int64)            where T = attach_nums((; τ_pl = zero(T),),i)
 @inline differentiable_kwargs(::Type{T}, ::typeof(compute_plastic_stress), i::Int64)                 where T = attach_nums((; τ_pl = zero(T),),i)
 @inline differentiable_kwargs(::Type{T}, ::typeof(compute_volumetric_plastic_strain_rate), i::Int64) where T = attach_nums((; τ_pl = zero(T), P_pl = zero(T)),i)
+=#
 
 differentiable_kwargs(funs::NTuple{N, Any}) where N = differentiable_kwargs(Float64, funs)
 differentiable_kwargs(funs::NTuple{N, Any}, nums::NTuple{N,Any}) where N = differentiable_kwargs(Float64, funs, nums)

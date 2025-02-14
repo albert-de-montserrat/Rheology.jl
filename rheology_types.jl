@@ -1,4 +1,4 @@
-
+import Base: tail
 struct LinearViscosity{T} <: AbstractRheology
     η::T
 end
@@ -172,5 +172,47 @@ function get_unique_state_functions(composite::NTuple{N, AbstractRheology}, stat
     # get unique state functions
     return flatten_repeated_functions(funs)
 end
+
+
+@inline state_var_reduction(::AbstractRheology, x::NTuple{N, T}) where {T<:Number, N} = sum(x[i] for i in 1:N)
+
+@inline merge_funs(funs1::NTuple{N1, Any}, funs2::NTuple{N2, Any}) where {N1, N2} = (funs1..., funs2...)
+
+@generated function reduction_funs_args_indices(funs_local::NTuple{N1, Any}, unique_funs_local::NTuple{N2, Any}) where {N1, N2}
+    quote
+        @inline 
+        Base.@ntuple $N2 i ->  begin
+            ind = Base.@ntuple $N1 j-> begin
+                unique_funs_local[i] == funs_local[j] ? j : ()
+            end
+            Base.IteratorsMD.flatten(ind)
+        end
+    end
+end
+
+@inline all_differentiable_kwargs(funs::NTuple{N, Any}) where N = all_differentiable_kwargs(Float64, funs)
+
+@generated function all_differentiable_kwargs(::Type{T}, funs::NTuple{N, Any}) where {N, T}
+    quote
+        @inline 
+        Base.@ntuple $N i -> differentiable_kwargs($T, funs[i])
+    end
+end
+
+#=
+# get the difference between two tuples
+@inline function sorted_setdiff(t1::Tuple, t2::Tuple)
+    if t1[1] == t2[1]
+        sorted_setdiff(tail(t1), tail(t2))
+    else
+        (t1[1], sorted_setdiff(tail(t1), t2)...)
+    end
+end
+@noinline sorted_setdiff(t1::Tuple{}, t2::Tuple) = t1
+sorted_setdiff(t1::Tuple, ::Tuple{}) = t1
+sorted_setdiff(::Tuple{}, ::Tuple{}) = ()
+=#
+
+
 
 # get_unique_state_functions(::AbstractCompositeModel, ::Any) = ()
