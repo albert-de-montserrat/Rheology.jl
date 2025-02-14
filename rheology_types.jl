@@ -137,12 +137,12 @@ isvolumetric(r::ParallelModel) = any(isvolumetric.(r.siblings))
 end
 
 # function barrier to evaluate state function
-eval_state_function(fn::F, r::AbstractRheology, args::NamedTuple) where F = fn(r, args)
+eval_state_function(fn::F, r::AbstractRheology, args) where F = fn(r, args)
 
-@generated function eval_state_functions(funs::NTuple{N, Any}, r::AbstractRheology, args::NamedTuple) where {N}
+@generated function eval_state_functions(funs::NTuple{N, Any}, r::AbstractRheology, args) where {N}
     quote
         @inline 
-        Base.@nexprs $N i -> x_i = eval_state_function(funs[i], r, args) 
+        Base.@nexprs $N i -> x_i = eval_state_function(funs[i], r, args[i]) 
         Base.@ncall $N SVector x
     end
 end

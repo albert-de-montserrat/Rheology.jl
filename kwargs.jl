@@ -49,8 +49,8 @@ end
 @inline differentiable_kwargs(::Type{T}, ::typeof(compute_plastic_stress), i::Int64)                 where T = attach_nums((; τ_pl = zero(T),),i)
 @inline differentiable_kwargs(::Type{T}, ::typeof(compute_volumetric_plastic_strain_rate), i::Int64) where T = attach_nums((; τ_pl = zero(T), P_pl = zero(T)),i)
 
-differentiable_kwargs(funs::NTuple{N, Any}) where N = differentiable_kwargs(Float64, funs)
-differentiable_kwargs(funs::NTuple{N, Any}, nums::NTuple{N,Any}) where N = differentiable_kwargs(Float64, funs, nums)
+@inline differentiable_kwargs(funs::NTuple{N, Any}) where N = differentiable_kwargs(Float64, funs)
+@inline differentiable_kwargs(funs::NTuple{N, Any}, nums::NTuple{N,Any}) where N = differentiable_kwargs(Float64, funs, nums)
 
 @generated function differentiable_kwargs(::Type{T}, funs::NTuple{N, Any}) where {N, T}
     quote
@@ -68,6 +68,15 @@ end
     end
 end
 
+
+@inline all_differentiable_kwargs(funs::NTuple{N, Any}) where N = all_differentiable_kwargs(Float64, funs)
+
+@generated function all_differentiable_kwargs(::Type{T}, funs::NTuple{N, Any}) where {N, T}
+    quote
+        @inline 
+        Base.@ntuple $N i -> differentiable_kwargs($T, funs[i])
+    end
+end
 
 function split_args(args, statefuns::NTuple{N, Any}) where N
     # split args into differentiable and not differentiable
