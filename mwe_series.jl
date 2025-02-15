@@ -24,7 +24,6 @@ function bt_line_search(Δx, J, R, statefuns, composite::NTuple{N, Any}, args, v
     return α
 end
 
-
 @inline state_var_reduction(::AbstractRheology, x::NTuple{N, T}) where {T<:Number, N} = sum(x[i] for i in 1:N)
 
 @inline merge_funs(funs1::NTuple{N1, Any}, funs2::NTuple{N2, Any}) where {N1, N2} = (funs1..., funs2...)
@@ -42,6 +41,7 @@ end
 end
 
 getindex_tuple(x, inds::NTuple{N, Int}) where N = ntuple(i -> x[inds[i]], Val(N))
+generate_subtractor(x, inds::NTuple{N, Int}) where N = SVector{N}(iszero(inds[i]) ? 0e0 : x[inds[i]] for i in 1:N)
 
 _generate_args_from_x(xᵢ::NTuple{N, Number}, ::Tuple{}, ::Any) where N = xᵢ
 function _generate_args_from_x(xᵢ::NTuple{N, Number}, args_templateᵢ::NamedTuple, args_allᵢ::NamedTuple) where N
@@ -59,11 +59,25 @@ end
     end
 end
 
+@generated function mapping_x_to_subtractor(state_funs::NTuple{N1, Any}, unique_funs_local::NTuple{N2, Any}) where {N1, N2}
+    quote
+        @inline 
+        Base.@ntuple $N1 i -> begin
+            ind = 0
+            Base.@nexprs $N2 j -> begin
+                check = unique_funs_local[j] === state_funs[i]
+                check && (ind = j)
+            end
+            ind
+        end
+    end
+end
 
 
 viscous    = LinearViscosity(5e19)
 powerlaw   = PowerLawViscosity(5e19, 3)
 elastic    = Elasticity(1e10, 1e12) # im making up numbers
+composite  = viscous ,powerlaw ,elastic
 dt         = 1e10
 vars       = (; ε = 1e-15, θ = 1e-20) # input variables
 args_solve = (; τ = 1e2, P = 1e6) # we solve for this, initial guess
@@ -88,10 +102,16 @@ args_reduction    = ntuple(_ -> (), Val(N_reductions))
 state_funs        = merge_funs(state_reductions, funs_local)
 reduction_ind     = reduction_funs_args_indices(funs_local, unique_funs_local)
 
+args_residual     = residual_kwargs(state_funs)
+
 inds_args_to_x    = tuple(
     tuple([ind .+ N_reductions for ind in reduction_ind]...)...,
     ntuple(x -> (x + N_reductions,), Val(length(funs_local)))...,
 )
+
+
+inds_x_to_subtractor = mapping_x_to_subtractor(state_funs, unique_funs_local)
+
 
 local_x = SA[Base.IteratorsMD.flatten(values.(vars_local))...]
 state_x = SA[values(args_solve)...]
@@ -106,12 +126,14 @@ end
 
 args_all      = tuple(args_state..., args_local_aug...)
 args_template = tuple(args_reduction..., args_local...)
+args_tmp = generate_args_from_x(x, inds_args_to_x, args_template, args_all)
 
 # this is hardcoded for now...
 composite2 = (composite[1], composite[1], composite..., composite[end])
 f = x -> begin
-    args_tmp = generate_args_from_x(x, inds_args_to_x, args_template, args_all)
-    eval_state_functions(state_funs, composite2, args_tmp)
-end
-ForwardDiff.jacobian(x -> f(x), x)
+    subtractor = generate_subtractor(x, inds_x_to_subtractor)
+    args_tmp   = generate_args_from_x(x, inds_args_to_x, args_template, args_all)
+    eval_state_functions(state_funs, composite2, args_tmp) - subtractor
+end;
+J = ForwardDiff.jacobian(x -> f(x), x)
 

@@ -15,10 +15,24 @@ end
     end
     return (; zip(k, vals)...)
 end
+# dummy NamedTuple allocators
+
+@inline residual_kwargs(::Type{T}, ::Function)                                       where T = (; tmp = zero(T))
+@inline residual_kwargs(::Type{T}, ::typeof(compute_strain_rate))                    where T = (; ε = zero(T),)
+@inline residual_kwargs(::Type{T}, ::typeof(compute_volumetric_strain_rate))         where T = (; θ = zero(T))
+@inline residual_kwargs(::Type{T}, ::typeof(compute_stress))                         where T = (; τ = zero(T),)
+@inline residual_kwargs(::Type{T}, ::typeof(compute_pressure))                       where T = (; P = zero(T),)
+# @inline residual_kwargs(::Type{T}, ::typeof(compute_lambda))                         where T = (; λ = zero(T)) # τ = zero(T), P = zero(T))
+# @inline residual_kwargs(::Type{T}, ::typeof(compute_plastic_strain_rate))            where T = (; τ_pl = zero(T),)
+# @inline residual_kwargs(::Type{T}, ::typeof(compute_plastic_stress))                 where T = (; τ_pl = zero(T),)
+# @inline residual_kwargs(::Type{T}, ::typeof(compute_volumetric_plastic_strain_rate)) where T = (; τ_pl = zero(T), P_pl = zero(T))
+
+@inline residual_kwargs(funs::F)              where F<:Function = residual_kwargs(Float64, funs)
+@inline residual_kwargs(funs::NTuple{N, Any}) where N           = residual_kwargs.(Float64, funs)
 
 # dummy NamedTuple allocators
 @inline differentiable_kwargs(::Type{T}, ::typeof(compute_strain_rate))                    where T = (; τ = zero(T),)
-@inline differentiable_kwargs(::Type{T}, ::typeof(compute_volumetric_strain_rate))         where T = (; τ = zero(T), P = zero(T))
+@inline differentiable_kwargs(::Type{T}, ::typeof(compute_volumetric_strain_rate))         where T = (; P = zero(T))
 @inline differentiable_kwargs(::Type{T}, ::typeof(compute_lambda))                         where T = (; λ = zero(T)) # τ = zero(T), P = zero(T))
 @inline differentiable_kwargs(::Type{T}, ::typeof(compute_stress))                         where T = (; ε = zero(T),)
 @inline differentiable_kwargs(::Type{T}, ::typeof(compute_pressure))                       where T = (; θ = zero(T),)
