@@ -73,67 +73,72 @@ end
     end
 end
 
-
-viscous    = LinearViscosity(5e19)
-powerlaw   = PowerLawViscosity(5e19, 3)
-elastic    = Elasticity(1e10, 1e12) # im making up numbers
-composite  = viscous ,powerlaw ,elastic
-dt         = 1e10
-vars       = (; ε = 1e-15, θ = 1e-20) # input variables
-args_solve = (; τ = 1e2, P = 1e6) # we solve for this, initial guess
-args_other = (; dt = 1e10) # other args that may be needed, non differentiable
-
-
-funs_local     = parallel_state_functions(composite)
-args_local     = all_differentiable_kwargs(funs_local)
-vars_local     = ntuple(Val(length(args_local))) do i 
-    k = keys(args_local[i])
-    v = (vars[first(k)],)
-    (; zip(k, v)...)
-end
-args_local_aug = ntuple(Val(length(args_local))) do i 
-    merge(args_local[i], args_other, vars)
-end
-
-unique_funs_local = flatten_repeated_functions(funs_local)
-N_reductions      = length(unique_funs_local)
-state_reductions  = ntuple(i -> state_var_reduction, Val(N_reductions))
-args_reduction    = ntuple(_ -> (), Val(N_reductions))
-state_funs        = merge_funs(state_reductions, funs_local)
-reduction_ind     = reduction_funs_args_indices(funs_local, unique_funs_local)
-
-args_residual     = residual_kwargs(state_funs)
-
-inds_args_to_x    = tuple(
-    tuple([ind .+ N_reductions for ind in reduction_ind]...)...,
-    ntuple(x -> (x + N_reductions,), Val(length(funs_local)))...,
-)
+function main()
+    viscous    = LinearViscosity(5e19)
+    powerlaw   = PowerLawViscosity(5e19, 3)
+    elastic    = Elasticity(1e10, 1e12) # im making up numbers
+    composite  = viscous ,powerlaw ,elastic
+    dt         = 1e10
+    vars       = (; ε = 1e-15, θ = 1e-20) # input variables
+    args_solve = (; τ = 1e2, P = 1e6) # we solve for this, initial guess
+    args_other = (; dt = 1e10) # other args that may be needed, non differentiable
 
 
-inds_x_to_subtractor = mapping_x_to_subtractor(state_funs, unique_funs_local)
-
-
-local_x = SA[Base.IteratorsMD.flatten(values.(vars_local))...]
-state_x = SA[values(args_solve)...]
-x       = SA[state_x..., local_x...]
-
-args_state = ntuple(Val(N_reductions)) do i
-    ntuple(Val(length(reduction_ind[i]))) do j
-        ind = reduction_ind[i][j]
-        local_x[ind]
+    funs_local     = parallel_state_functions(composite)
+    args_local     = all_differentiable_kwargs(funs_local)
+    vars_local     = ntuple(Val(length(args_local))) do i 
+        k = keys(args_local[i])
+        v = (vars[first(k)],)
+        (; zip(k, v)...)
     end
+    args_local_aug = ntuple(Val(length(args_local))) do i 
+        merge(args_local[i], args_other, vars)
+    end
+
+    unique_funs_local = flatten_repeated_functions(funs_local)
+    N_reductions      = length(unique_funs_local)
+    state_reductions  = ntuple(i -> state_var_reduction, Val(N_reductions))
+    args_reduction    = ntuple(_ -> (), Val(N_reductions))
+    state_funs        = merge_funs(state_reductions, funs_local)
+    reduction_ind     = reduction_funs_args_indices(funs_local, unique_funs_local)
+
+    args_residual     = residual_kwargs(state_funs)
+
+    inds_args_to_x    = tuple(
+        ntuple(i -> reduction_ind[i] .+ N_reductions, Val(length(reduction_ind)))...,
+        ntuple(x -> (x + N_reductions,), Val(length(funs_local)))...,
+    )
+
+
+    inds_x_to_subtractor = mapping_x_to_subtractor(state_funs, unique_funs_local)
+
+
+    local_x = SA[Base.IteratorsMD.flatten(values.(vars_local))...]
+    state_x = SA[values(args_solve)...]
+    x       = SA[state_x..., local_x...]
+
+    args_state = ntuple(Val(N_reductions)) do i
+        ntuple(Val(length(reduction_ind[i]))) do j
+            ind = reduction_ind[i][j]
+            local_x[ind]
+        end
+    end
+
+    args_all      = tuple(args_state..., args_local_aug...)
+    args_template = tuple(args_reduction..., args_local...)
+    args_tmp      = generate_args_from_x(x, inds_args_to_x, args_template, args_all)
+
+    # this is hardcoded for now...
+    composite2 = (composite[1], composite[1], composite..., composite[end])
+    function f(x) # = x -> begin # this can be wrapped as eval_residual(x, etc...)
+        subtractor = generate_subtractor(x, inds_x_to_subtractor)
+        args_tmp   = generate_args_from_x(x, inds_args_to_x, args_template, args_all)
+        # eval_state_functions(state_funs, composite2, args_tmp) 
+        eval_state_functions(state_funs, composite2, args_tmp) - subtractor
+    end;
+    # f(x)
+    J = ForwardDiff.jacobian(x -> f(x), x)
 end
 
-args_all      = tuple(args_state..., args_local_aug...)
-args_template = tuple(args_reduction..., args_local...)
-args_tmp = generate_args_from_x(x, inds_args_to_x, args_template, args_all)
-
-# this is hardcoded for now...
-composite2 = (composite[1], composite[1], composite..., composite[end])
-f = x -> begin
-    subtractor = generate_subtractor(x, inds_x_to_subtractor)
-    args_tmp   = generate_args_from_x(x, inds_args_to_x, args_template, args_all)
-    eval_state_functions(state_funs, composite2, args_tmp) - subtractor
-end;
-J = ForwardDiff.jacobian(x -> f(x), x)
-
+@b main()
+@code_warntype main()
