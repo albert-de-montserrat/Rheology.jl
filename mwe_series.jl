@@ -24,6 +24,13 @@ function bt_line_search(Δx, J, R, statefuns, composite::NTuple{N, Any}, args, v
     return α
 end
 
+@inline function eval_residual(x, composite, state_funs, inds_x_to_subtractor, inds_args_to_x, args_template, args_all)
+    subtractor = generate_subtractor(x, inds_x_to_subtractor)
+    args_tmp   = generate_args_from_x(x, inds_args_to_x, args_template, args_all)
+    eval_state_functions(state_funs, composite, args_tmp) 
+    # eval_state_functions(state_funs, composite2, args_tmp) - subtractor
+end
+
 @inline state_var_reduction(::AbstractRheology, x::NTuple{N, T}) where {T<:Number, N} = sum(x[i] for i in 1:N)
 
 @inline merge_funs(funs1::NTuple{N1, Any}, funs2::NTuple{N2, Any}) where {N1, N2} = (funs1..., funs2...)
@@ -73,16 +80,7 @@ end
     end
 end
 
-function main()
-    viscous    = LinearViscosity(5e19)
-    powerlaw   = PowerLawViscosity(5e19, 3)
-    elastic    = Elasticity(1e10, 1e12) # im making up numbers
-    composite  = viscous ,powerlaw ,elastic
-    dt         = 1e10
-    vars       = (; ε = 1e-15, θ = 1e-20) # input variables
-    args_solve = (; τ = 1e2, P = 1e6) # we solve for this, initial guess
-    args_other = (; dt = 1e10) # other args that may be needed, non differentiable
-
+function main(composite, vars, args_solve, args_other)
 
     funs_local     = parallel_state_functions(composite)
     args_local     = all_differentiable_kwargs(funs_local)
@@ -130,16 +128,18 @@ function main()
 
     # this is hardcoded for now...
     composite2 = (composite[1], composite[1], composite..., composite[end])
-    function f(x) # = x -> begin # this can be wrapped as eval_residual(x, etc...)
-        subtractor = generate_subtractor(x, inds_x_to_subtractor)
-        args_tmp   = generate_args_from_x(x, inds_args_to_x, args_template, args_all)
-        # eval_state_functions(state_funs, composite2, args_tmp) 
-        eval_state_functions(state_funs, composite2, args_tmp) - subtractor
-    end;
-    # f(x)
-    J = ForwardDiff.jacobian(x -> f(x), x)
+    # eval_residual(x, composite2, state_funs, inds_x_to_subtractor, inds_args_to_x, args_template, args_all)
+    J = ForwardDiff.jacobian(x -> eval_residual(x, composite2, state_funs, inds_x_to_subtractor, inds_args_to_x, args_template, args_all), x)
+
 end
 
-# theres an allocation coming from eval_state_functions inside f(x) to be hunted down
-@b main() 
-@code_warntype main()
+viscous    = LinearViscosity(5e19)
+powerlaw   = PowerLawViscosity(5e19, 3)
+elastic    = Elasticity(1e10, 1e12) # im making up numbers
+composite  = viscous ,powerlaw ,elastic
+dt         = 1e10
+vars       = (; ε = 1e-15, θ = 1e-20) # input variables
+args_solve = (; τ = 1e2, P = 1e6) # we solve for this, initial guess
+args_other = (; dt = 1e10) # other args that may be needed, non differentiable
+
+@b main($(composite, vars, args_solve, args_other)...)
