@@ -142,4 +142,5 @@ vars       = (; ε = 1e-15, θ = 1e-20) # input variables
 args_solve = (; τ = 1e2, P = 1e6) # we solve for this, initial guess
 args_other = (; dt = 1e10) # other args that may be needed, non differentiable
 
+#still allocates a bit..
 @b main($(composite, vars, args_solve, args_other)...)
