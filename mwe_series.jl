@@ -24,11 +24,10 @@ function bt_line_search(Δx, J, R, statefuns, composite::NTuple{N, Any}, args, v
     return α
 end
 
-@inline function eval_residual(x, composite, state_funs, inds_x_to_subtractor, inds_args_to_x, args_template, args_all)
+function eval_residual(x, composite, state_funs, inds_x_to_subtractor, inds_args_to_x, args_template, args_all)
     subtractor = generate_subtractor(x, inds_x_to_subtractor)
     args_tmp   = generate_args_from_x(x, inds_args_to_x, args_template, args_all)
-    eval_state_functions(state_funs, composite, args_tmp) 
-    # eval_state_functions(state_funs, composite2, args_tmp) - subtractor
+    eval_state_functions(state_funs, composite, args_tmp) - subtractor
 end
 
 @inline state_var_reduction(::AbstractRheology, x::NTuple{N, T}) where {T<:Number, N} = sum(x[i] for i in 1:N)
@@ -48,7 +47,12 @@ end
 end
 
 getindex_tuple(x, inds::NTuple{N, Int}) where N = ntuple(i -> x[inds[i]], Val(N))
-generate_subtractor(x, inds::NTuple{N, Int}) where N = SVector{N}(iszero(inds[i]) ? 0e0 : x[inds[i]] for i in 1:N)
+@generated function generate_subtractor(x::SVector{N, T}, inds::NTuple{N, Int}) where {N,T}
+    quote
+        Base.@nexprs $N i -> x_i = iszero(inds[i]) ? zero(T) : x[inds[i]]
+        Base.@ncall $N SVector x
+    end 
+end
 
 _generate_args_from_x(xᵢ::NTuple{N, Number}, ::Tuple{}, ::Any) where N = xᵢ
 function _generate_args_from_x(xᵢ::NTuple{N, Number}, args_templateᵢ::NamedTuple, args_allᵢ::NamedTuple) where N
@@ -129,7 +133,10 @@ function main(composite, vars, args_solve, args_other)
     # this is hardcoded for now...
     composite2 = (composite[1], composite[1], composite..., composite[end])
     # eval_residual(x, composite2, state_funs, inds_x_to_subtractor, inds_args_to_x, args_template, args_all)
-    J = ForwardDiff.jacobian(x -> eval_residual(x, composite2, state_funs, inds_x_to_subtractor, inds_args_to_x, args_template, args_all), x)
+    J = ForwardDiff.jacobian(
+        z -> eval_residual(z, composite2, state_funs, inds_x_to_subtractor, inds_args_to_x, args_template, args_all), 
+        x
+    )
 
 end
 
@@ -144,3 +151,4 @@ args_other = (; dt = 1e10) # other args that may be needed, non differentiable
 
 #still allocates a bit..
 @b main($(composite, vars, args_solve, args_other)...)
+@code_warntype main(composite, vars, args_solve, args_other)
