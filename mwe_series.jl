@@ -140,5 +140,6 @@ function main()
     J = ForwardDiff.jacobian(x -> f(x), x)
 end
 
-@b main()
+# theres an allocation coming from eval_state_functions inside f(x) to be hunted down
+@b main() 
 @code_warntype main()
