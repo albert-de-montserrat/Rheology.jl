@@ -1,6 +1,7 @@
 using LinearAlgebra
 using StaticArrays
 using ForwardDiff
+using DifferentiationInterface
 
 include("composite.jl") # not functional yet
 include("rheology_types.jl")
@@ -24,10 +25,10 @@ function bt_line_search(Δx, J, R, statefuns, composite::NTuple{N, Any}, args, v
     return α
 end
 
-function eval_residual(x, composite, state_funs, inds_x_to_subtractor, inds_args_to_x, args_template, args_all)
+function eval_residual(x, composite, state_funs, subtractor_vars, inds_x_to_subtractor, inds_args_to_x, args_template, args_all)
     subtractor = generate_subtractor(x, inds_x_to_subtractor)
     args_tmp   = generate_args_from_x(x, inds_args_to_x, args_template, args_all)
-    eval_state_functions(state_funs, composite, args_tmp) - subtractor
+    eval_state_functions(state_funs, composite, args_tmp) - subtractor - subtractor_vars
 end
 
 @inline state_var_reduction(::AbstractRheology, x::NTuple{N, T}) where {T<:Number, N} = sum(x[i] for i in 1:N)
@@ -84,6 +85,7 @@ end
     end
 end
 
+
 function main(composite, vars, args_solve, args_other)
 
     funs_local     = parallel_state_functions(composite)
@@ -103,6 +105,9 @@ function main(composite, vars, args_solve, args_other)
     args_reduction    = ntuple(_ -> (), Val(N_reductions))
     state_funs        = merge_funs(state_reductions, funs_local)
     reduction_ind     = reduction_funs_args_indices(funs_local, unique_funs_local)
+
+    N = length(state_funs)
+    subtractor_vars = SVector{N}(i ≤ N_reductions ? values(vars)[i] : 0e0 for i in 1:N)
 
     args_residual     = residual_kwargs(state_funs)
 
@@ -128,15 +133,22 @@ function main(composite, vars, args_solve, args_other)
 
     args_all      = tuple(args_state..., args_local_aug...)
     args_template = tuple(args_reduction..., args_local...)
-    args_tmp      = generate_args_from_x(x, inds_args_to_x, args_template, args_all)
+    # args_tmp      = generate_args_from_x(x, inds_args_to_x, args_template, args_all)
 
     # this is hardcoded for now...
     composite2 = (composite[1], composite[1], composite..., composite[end])
-    # eval_residual(x, composite2, state_funs, inds_x_to_subtractor, inds_args_to_x, args_template, args_all)
-    J = ForwardDiff.jacobian(
-        z -> eval_residual(z, composite2, state_funs, inds_x_to_subtractor, inds_args_to_x, args_template, args_all), 
+    # J = ForwardDiff.jacobian(
+    #     z -> eval_residual(z, composite2, state_funs, inds_x_to_subtractor, inds_args_to_x, args_template, args_all), 
+    #     x
+    # )
+    # R = eval_residual(x, composite2, state_funs, inds_x_to_subtractor, inds_args_to_x, args_template, args_all)
+
+    R, J = value_and_jacobian(
+        x -> eval_residual(x, composite2, state_funs, subtractor_vars, inds_x_to_subtractor, inds_args_to_x, args_template, args_all), 
+        AutoForwardDiff(), 
         x
     )
+    J \ R
 
 end
 
@@ -150,5 +162,6 @@ args_solve = (; τ = 1e2, P = 1e6) # we solve for this, initial guess
 args_other = (; dt = 1e10) # other args that may be needed, non differentiable
 
 #still allocates a bit..
-@b main($(composite, vars, args_solve, args_other)...)
-@code_warntype main(composite, vars, args_solve, args_other)
+# @b main($(composite, vars, args_solve, args_other)...)
+# J,R=main(composite, vars, args_solve, args_other)
+# @code_warntype main(composite, vars, args_solve, args_other)
