@@ -85,6 +85,25 @@ end
     end
 end
 
+@generated function expand_composite(composite::NTuple{N, AbstractRheology}, funs_local) where N
+    quote
+        @inline
+        c = Base.@ntuple $N i -> begin
+            fns = parallel_state_functions(composite[i])
+            _expand_composite(composite[i], funs_local, fns)
+        end
+        Base.IteratorsMD.flatten(c)
+    end
+end
+
+@generated function _expand_composite(compositeᵢ, funs_local, fns::NTuple{N, Any}) where N
+    quote
+        @inline
+        Base.@ntuple $N i -> begin
+            fns[i] ∈ funs_local ? compositeᵢ : ()
+        end
+    end
+end
 
 function main(composite, vars, args_solve, args_other)
 
@@ -106,19 +125,17 @@ function main(composite, vars, args_solve, args_other)
     state_funs        = merge_funs(state_reductions, funs_local)
     reduction_ind     = reduction_funs_args_indices(funs_local, unique_funs_local)
 
-    N = length(state_funs)
-    subtractor_vars = SVector{N}(i ≤ N_reductions ? values(vars)[i] : 0e0 for i in 1:N)
+    N                 = length(state_funs)
+    subtractor_vars   = SVector{N}(i ≤ N_reductions ? values(vars)[i] : 0e0 for i in 1:N)
 
-    args_residual     = residual_kwargs(state_funs)
+    # args_residual     = residual_kwargs(state_funs)
 
     inds_args_to_x    = tuple(
-        ntuple(i -> reduction_ind[i] .+ N_reductions, Val(length(reduction_ind)))...,
+        ntuple(i -> reduction_ind[i] .+ N_reductions, Val(N_reductions))...,
         ntuple(x -> (x + N_reductions,), Val(length(funs_local)))...,
     )
 
-
     inds_x_to_subtractor = mapping_x_to_subtractor(state_funs, unique_funs_local)
-
 
     local_x = SA[Base.IteratorsMD.flatten(values.(vars_local))...]
     state_x = SA[values(args_solve)...]
@@ -136,12 +153,8 @@ function main(composite, vars, args_solve, args_other)
     # args_tmp      = generate_args_from_x(x, inds_args_to_x, args_template, args_all)
 
     # this is hardcoded for now...
-    composite2 = (composite[1], composite[1], composite..., composite[end])
-    # J = ForwardDiff.jacobian(
-    #     z -> eval_residual(z, composite2, state_funs, inds_x_to_subtractor, inds_args_to_x, args_template, args_all), 
-    #     x
-    # )
-    # R = eval_residual(x, composite2, state_funs, inds_x_to_subtractor, inds_args_to_x, args_template, args_all)
+    dummy_composite = ntuple(_-> first(composite), Val(N_reductions))
+    composite2      = (dummy_composite..., expand_composite(composite, funs_local)...)
 
     R, J = value_and_jacobian(
         x -> eval_residual(x, composite2, state_funs, subtractor_vars, inds_x_to_subtractor, inds_args_to_x, args_template, args_all), 
@@ -161,7 +174,4 @@ vars       = (; ε = 1e-15, θ = 1e-20) # input variables
 args_solve = (; τ = 1e2, P = 1e6) # we solve for this, initial guess
 args_other = (; dt = 1e10) # other args that may be needed, non differentiable
 
-#still allocates a bit..
-# @b main($(composite, vars, args_solve, args_other)...)
-# J,R=main(composite, vars, args_solve, args_other)
-# @code_warntype main(composite, vars, args_solve, args_other)
+@b main($(composite, vars, args_solve, args_other)...)

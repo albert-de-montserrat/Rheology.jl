@@ -31,27 +31,28 @@ end
 DruckerPrager(args...) = DruckerPrager(promote(args...)...)
 
 ## METHODS FOR SERIES MODELS
+@inline length_state_functions(r::AbstractRheology)                    = length(series_state_functions(r))
+@inline length_state_functions(r::NTuple{N, AbstractRheology}) where N = length_state_functions(first(r))..., length_state_functions(Base.tail(r))...
+@inline length_state_functions(r::Tuple{})                             = ()
 
 # table of methods needed per rheology
-@inline series_state_functions(::LinearViscosity) = (compute_strain_rate,)
-@inline series_state_functions(::LinearViscosityStress) = (compute_stress,)
-@inline series_state_functions(::PowerLawViscosity) = (compute_strain_rate,)
-@inline series_state_functions(::Elasticity) = compute_strain_rate, compute_volumetric_strain_rate
+@inline series_state_functions(::LinearViscosity)          = (compute_strain_rate,)
+@inline series_state_functions(::LinearViscosityStress)    = (compute_stress,)
+@inline series_state_functions(::PowerLawViscosity)        = (compute_strain_rate,)
+@inline series_state_functions(::Elasticity)               = compute_strain_rate, compute_volumetric_strain_rate
 @inline series_state_functions(::IncompressibleElasticity) = (compute_strain_rate, )
-@inline series_state_functions(::DruckerPrager) = compute_strain_rate, compute_volumetric_strain_rate, compute_lambda
-@inline series_state_functions(::DruckerPrager) = (compute_strain_rate, compute_lambda)
+@inline series_state_functions(::DruckerPrager)            = compute_strain_rate, compute_volumetric_strain_rate, compute_lambda
+@inline series_state_functions(::DruckerPrager)            = (compute_strain_rate, compute_lambda)
 #@inline series_state_functions(r::Series) = series_state_functions(r.elements)
-@inline series_state_functions(::AbstractRheology) = error("Rheology not defined")
+@inline series_state_functions(::AbstractRheology)         = error("Rheology not defined")
 # handle tuples
 @inline series_state_functions(r::NTuple{N, AbstractRheology}) where N = series_state_functions(first(r))..., series_state_functions(Base.tail(r))...
 
-
 # returns the flattened statefunctions along with NTuples with global & local element numbers
 function series_state_functions(r::NTuple{N, AbstractRheology}, num::MVector{N,Int}) where N 
-    statefuns = (series_state_functions(first(r))...,  series_state_functions(Base.tail(r))...)
-    
-    len = ntuple(i->length(series_state_functions(r[i])),N)
-    statenum    = ntuple(i->val(i,len,num),Val(sum(len)))
+    statefuns     = (series_state_functions(first(r))...,  series_state_functions(Base.tail(r))...)
+    len           = ntuple(i->length(series_state_functions(r[i])),N)
+    statenum      = ntuple(i->val(i,len,num),Val(sum(len)))
     stateelements = ntuple(i->val_element(i,len),Val(sum(len)))
 
     return statefuns, statenum, stateelements
