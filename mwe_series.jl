@@ -107,9 +107,7 @@ end
 
 function main(composite, vars, args_solve, args_other)
 
-    #funs_local     = parallel_state_functions(composite)
-    funs_local     = series_state_functions(composite)
-    
+    funs_local     = parallel_state_functions(composite)
     args_local     = all_differentiable_kwargs(funs_local)
     vars_local     = ntuple(Val(length(args_local))) do i 
         k = keys(args_local[i])
@@ -163,8 +161,8 @@ function main(composite, vars, args_solve, args_other)
         AutoForwardDiff(), 
         x
     )
+    J \ R
 
-    return J \ R
 end
 
 viscous    = LinearViscosity(5e19)
@@ -176,9 +174,4 @@ vars       = (; ε = 1e-15, θ = 1e-20) # input variables
 args_solve = (; τ = 1e2, P = 1e6) # we solve for this, initial guess
 args_other = (; dt = 1e10) # other args that may be needed, non differentiable
 
-#still allocates a bit..
-# @b main($(composite, vars, args_solve, args_other)...)
-# J,R=main(composite, vars, args_solve, args_other)
-# @code_warntype main(composite, vars, args_solve, args_other)
 main((composite, vars, args_solve, args_other)...)
-#@code_warntype main(composite, vars, args_solve, args_other)
