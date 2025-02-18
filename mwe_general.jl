@@ -114,6 +114,9 @@ end
     end
 end
 
+@inline function expand_composite(composite::NTuple{N, AbstractRheology}, funs_local, ::Val{N_reductions}) where {N, N_reductions}
+    (ntuple(_-> first(composite), Val(N_reductions))..., expand_composite(composite, funs_local)...)
+end
 
 @generated function generate_subtractor_global(composite, state_funs::NTuple{N1, Any}, funs_global, inds_x_to_subtractor::NTuple{N2, Int}, args_solve) where {N1, N2}
     quote
@@ -165,7 +168,7 @@ function main(composite, vars, args_solve, args_other)
     args_global        = all_differentiable_kwargs(funs_global)
     # vars_global        = vars
     # unique_funs_global = flatten_repeated_functions(funs_global)
-    args_local_aug     = ntuple(Val(length(args_global))) do i 
+    args_global_aug    = ntuple(Val(length(args_global))) do i 
         merge(args_global[i], args_other)
     end
     
@@ -213,23 +216,22 @@ function main(composite, vars, args_solve, args_other)
     # template for args to do pattern matching later
     args_template = tuple(args_reduction..., args_local...)
 
-    # this is hardcoded for now...
-    dummy_composite = ntuple(_-> first(composite), Val(N_reductions))
-    composite2      = (dummy_composite..., expand_composite(composite, funs_local)...)
+    # need to expand the composite for the local equations
+    composite_expanded = expand_composite(composite, funs_local, Val(N_reductions))
 
     R, J = value_and_jacobian(
-        x -> eval_residual2(x, composite2, state_funs, funs_global, subtractor_vars, inds_x_to_subtractor, inds_args_to_x, args_template, args_all, args_solve), 
+        x -> eval_residual2(x, composite_expanded, state_funs, funs_global, subtractor_vars, inds_x_to_subtractor, inds_args_to_x, args_template, args_all, args_solve), 
         AutoForwardDiff(), 
         x
     )
-    # J \ R
+    J \ R
 
 end
 
 viscous    = LinearViscosity(5e19)
 powerlaw   = PowerLawViscosity(5e19, 3)
 elastic    = Elasticity(1e10, 1e12) # im making up numbers
-composite  = viscous ,powerlaw
+composite  = viscous, powerlaw
 dt         = 1e10
 vars       = (; ε = 1e-15,) # input variables
 args_solve = (; τ = 1e2,) # we solve for this, initial guess
