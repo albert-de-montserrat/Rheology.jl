@@ -31,6 +31,15 @@ function eval_residual(x, composite, state_funs, subtractor_vars, inds_x_to_subt
     eval_state_functions(state_funs, composite, args_tmp) - subtractor - subtractor_vars
 end
 
+function eval_residual2(x, composite, state_funs, funs_global, subtractor_vars, inds_x_to_subtractor, inds_args_to_x, args_template, args_all, args_solve)
+    subtractor = generate_subtractor(x, inds_x_to_subtractor)
+    args_tmp   = generate_args_from_x(x, inds_args_to_x, args_template, args_all)
+    args_solve2 = update_args2(args_solve, x)
+    subtractor_global = generate_subtractor_global(composite, state_funs, funs_global, inds_x_to_subtractor, args_solve2)
+
+    eval_state_functions(state_funs, composite, args_tmp) - subtractor - subtractor_vars + subtractor_global
+end
+
 @inline state_var_reduction(::AbstractRheology, x::NTuple{N, T}) where {T<:Number, N} = sum(x[i] for i in 1:N)
 
 @inline merge_funs(funs1::NTuple{N1, Any}, funs2::NTuple{N2, Any}) where {N1, N2} = (funs1..., funs2...)
@@ -89,10 +98,10 @@ end
     quote
         @inline
         c = Base.@ntuple $N i -> begin
-            fns = parallel_state_functions(composite[i])
+            fns = series_state_functions(composite[i])
             _expand_composite(composite[i], funs_local, fns)
         end
-        Base.IteratorsMD.flatten(c)
+        Base.IteratorsMD.flatten(Base.IteratorsMD.flatten(c))
     end
 end
 
@@ -100,16 +109,70 @@ end
     quote
         @inline
         Base.@ntuple $N i -> begin
-            fns[i] ∈ funs_local ? compositeᵢ : ()
+            fns[i] ∈ funs_local ? ((compositeᵢ),) : ()
         end
+    end
+end
+
+
+@generated function generate_subtractor_global(composite, state_funs::NTuple{N1, Any}, funs_global, inds_x_to_subtractor::NTuple{N2, Int}, args_solve) where {N1, N2}
+    quote
+        @inline
+        v = Base.@ntuple $N1 i -> begin
+            val = zero(eltype(args_solve))
+            if state_funs[i] === state_var_reduction
+                fn = funs_global[i]
+                Base.@nexprs $N2 j -> begin
+                    if iszero(inds_x_to_subtractor[j]) 
+                        val += fn(composite[j], args_solve)
+                    end
+                end
+            end
+            val
+        end
+        SVector{$N1}(v)
+    end
+end
+
+_local_series_state_functions(::typeof(compute_strain_rate)) = ()
+_local_series_state_functions(::typeof(compute_volumetric_strain_rate)) = ()
+_local_series_state_functions(fn::F) where F<:Function = (fn,)
+
+@generated function local_series_state_functions(funs::NTuple{N, Any}) where N
+    quote
+        @inline
+        f = Base.@ntuple $N i -> _local_series_state_functions(funs[i])
+        Base.IteratorsMD.flatten(f)
+    end
+end
+
+_global_series_state_functions(fn::typeof(compute_strain_rate)) = (fn, )
+_global_series_state_functions(fn::typeof(compute_volumetric_strain_rate)) = (fn, )
+_global_series_state_functions(::F) where F<:Function = ()
+
+@generated function global_series_state_functions(funs::NTuple{N, Any}) where N
+    quote
+        @inline
+        f = Base.@ntuple $N i -> _global_series_state_functions(funs[i])
+        Base.IteratorsMD.flatten(f)
     end
 end
 
 function main(composite, vars, args_solve, args_other)
 
-    funs_local     = parallel_state_functions(composite)
-    args_local     = all_differentiable_kwargs(funs_local)
-    vars_local     = ntuple(Val(length(args_local))) do i 
+    funs_all           = series_state_functions(composite)
+    funs_global        = global_series_state_functions(funs_all)
+    args_global        = all_differentiable_kwargs(funs_global)
+    # vars_global        = vars
+    # unique_funs_global = flatten_repeated_functions(funs_global)
+    args_local_aug     = ntuple(Val(length(args_global))) do i 
+        merge(args_global[i], args_other)
+    end
+    
+    funs_local        = local_series_state_functions(funs_all)
+    unique_funs_local = flatten_repeated_functions(funs_local)
+    args_local        = all_differentiable_kwargs(funs_local)
+    vars_local        = ntuple(Val(length(args_local))) do i 
         k = keys(args_local[i])
         v = (vars[first(k)],)
         (; zip(k, v)...)
@@ -118,7 +181,6 @@ function main(composite, vars, args_solve, args_other)
         merge(args_local[i], args_other, vars)
     end
 
-    unique_funs_local = flatten_repeated_functions(funs_local)
     N_reductions      = length(unique_funs_local)
     state_reductions  = ntuple(i -> state_var_reduction, Val(N_reductions))
     args_reduction    = ntuple(_ -> (), Val(N_reductions))
@@ -127,8 +189,6 @@ function main(composite, vars, args_solve, args_other)
 
     N                 = length(state_funs)
     subtractor_vars   = SVector{N}(i ≤ N_reductions ? values(vars)[i] : 0e0 for i in 1:N)
-
-    # args_residual     = residual_kwargs(state_funs)
 
     inds_args_to_x    = tuple(
         ntuple(i -> reduction_ind[i] .+ N_reductions, Val(N_reductions))...,
@@ -148,30 +208,32 @@ function main(composite, vars, args_solve, args_other)
         end
     end
 
+    # 
     args_all      = tuple(args_state..., args_local_aug...)
+    # template for args to do pattern matching later
     args_template = tuple(args_reduction..., args_local...)
-    # args_tmp      = generate_args_from_x(x, inds_args_to_x, args_template, args_all)
 
     # this is hardcoded for now...
     dummy_composite = ntuple(_-> first(composite), Val(N_reductions))
     composite2      = (dummy_composite..., expand_composite(composite, funs_local)...)
 
     R, J = value_and_jacobian(
-        x -> eval_residual(x, composite2, state_funs, subtractor_vars, inds_x_to_subtractor, inds_args_to_x, args_template, args_all), 
+        x -> eval_residual2(x, composite2, state_funs, funs_global, subtractor_vars, inds_x_to_subtractor, inds_args_to_x, args_template, args_all, args_solve), 
         AutoForwardDiff(), 
         x
     )
-    J \ R
+    # J \ R
 
 end
 
 viscous    = LinearViscosity(5e19)
 powerlaw   = PowerLawViscosity(5e19, 3)
 elastic    = Elasticity(1e10, 1e12) # im making up numbers
-composite  = viscous ,powerlaw ,elastic
+composite  = viscous ,powerlaw
 dt         = 1e10
-vars       = (; ε = 1e-15, θ = 1e-20) # input variables
-args_solve = (; τ = 1e2, P = 1e6) # we solve for this, initial guess
-args_other = (; dt = 1e10) # other args that may be needed, non differentiable
+vars       = (; ε = 1e-15,) # input variables
+args_solve = (; τ = 1e2,) # we solve for this, initial guess
+args_other = (; ) # other args that may be needed, non differentiable
 
-main((composite, vars, args_solve, args_other)...)
+# main((composite, vars, args_solve, args_other)...)
+@b main($(composite, vars, args_solve, args_other)...)

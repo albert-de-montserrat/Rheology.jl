@@ -38,7 +38,8 @@ DruckerPrager(args...) = DruckerPrager(promote(args...)...)
 # table of methods needed per rheology
 @inline series_state_functions(::LinearViscosity)          = (compute_strain_rate,)
 @inline series_state_functions(::LinearViscosityStress)    = (compute_stress,)
-@inline series_state_functions(::PowerLawViscosity)        = (compute_strain_rate,)
+# @inline series_state_functions(::PowerLawViscosity)        = (compute_strain_rate,)
+@inline series_state_functions(::PowerLawViscosity)        = (compute_stress,)
 @inline series_state_functions(::Elasticity)               = compute_strain_rate, compute_volumetric_strain_rate
 @inline series_state_functions(::IncompressibleElasticity) = (compute_strain_rate, )
 @inline series_state_functions(::DruckerPrager)            = compute_strain_rate, compute_volumetric_strain_rate, compute_lambda

@@ -7,14 +7,16 @@
     return (; zip(k, vals)...)
 end
 
-@inline function update_args(args, Δx)
+@inline function update_args2(args, x::SVector{N, T}) where {N,T}
     k = keys(args)
-    vals = MVector(values(args))
-    for i in eachindex(Δx)
-        vals[i] = Δx[i]
+    N0 = length(args)
+    vals = @MVector zeros(T, N0)
+    for i in 1:length(args)
+        vals[i] = x[i]
     end
     return (; zip(k, vals)...)
 end
+
 # dummy NamedTuple allocators
 
 @inline residual_kwargs(::Type{T}, ::Function)                                       where T = (; tmp = zero(T))
