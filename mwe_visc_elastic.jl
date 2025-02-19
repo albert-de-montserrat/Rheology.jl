@@ -105,9 +105,6 @@ end
 end
 @inline generate_args_from_x(::SVector, ::Tuple{}, ::Any, ::Tuple{}) = (;)
 
-generate_args_from_x(x, inds_args_to_x, args_template, args_all)
-
-
 @generated function mapping_x_to_subtractor(state_funs::NTuple{N1, Any}, unique_funs_local::NTuple{N2, Any}) where {N1, N2}
     quote
         @inline 
@@ -260,7 +257,6 @@ function main(composite, vars, args_solve, args_other)
     subtractor_vars      = SVector{N}(i ≤ N_reductions ? values(vars)[i] : 0e0 for i in 1:N)
 
     inds_args_to_x       = generate_indices_from_args_to_x(funs_local, reduction_ind, Val(N_reductions))
-    # inds_args_to_x       = generate_indices_from_args_to_x(funs_local, reduction_ind, Val(N_reductions))
 
     # mapping from the state functions to the subtractor
     inds_x_to_subtractor = mapping_x_to_subtractor(state_funs, unique_funs_local)
@@ -319,37 +315,4 @@ elseif case === :case3
 end
 
 main(composite, vars, args_solve, args_other)
-
 # @b main($(composite, vars, args_solve, args_other)...)
-
-# # function eval_residual(x, composite_expanded, composite_global, state_funs, unique_funs_global, subtractor_vars, inds_x_to_subtractor, inds_args_to_x, args_template, args_all, args_solve, args_other)
-    # subtractor        = generate_subtractor(x, inds_x_to_subtractor)
-    # args_tmp          = generate_args_from_x(x, inds_args_to_x, args_template, args_all)
-    # args_solve2       = merge(update_args2(args_solve, x), args_other)
-    # subtractor_global = generate_subtractor_global(composite_global, state_funs, unique_funs_global, args_solve2)
-    
-#     eval_state_functions(state_funs, composite_expanded, args_tmp) - subtractor - subtractor_vars + subtractor_global
-# # end
-
-# eval_state_functions(state_funs, composite_expanded, args_tmp)
-
-# eval_residual(x, composite_expanded, composite_global, state_funs, unique_funs_global, subtractor_vars, inds_x_to_subtractor, inds_args_to_x, args_template, args_all, args_solve, args_other)
-
-
-# @generated function generate_subtractor_global(composite_global::NTuple{N3, AbstractRheology}, state_funs::NTuple{N1, Any}, unique_funs_global::NTuple{N2, Any}, args_solve) where {N1, N2, N3}
-#     quote
-#         @inline
-#         type = eltype(args_solve)
-#         v = Base.@ntuple $N1 i -> begin
-#             val = zero(type)
-#             if state_funs[i] === state_var_reduction
-#                 fn = unique_funs_global[i]
-#                 Base.@nexprs $N3 k -> begin
-#                     val += fn(composite_global[k], args_solve)
-#                 end
-#             end
-#             val
-#         end
-#         SVector{$N1, type}(v)
-#     end
-# end
