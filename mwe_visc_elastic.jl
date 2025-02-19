@@ -171,6 +171,7 @@ end
 
 _local_series_state_functions(::typeof(compute_strain_rate)) = ()
 _local_series_state_functions(::typeof(compute_volumetric_strain_rate)) = ()
+_local_series_state_functions(::typeof(compute_lambda)) = ()
 _local_series_state_functions(fn::F) where F<:Function = (fn,)
 
 @generated function local_series_state_functions(funs::NTuple{N, Any}) where N
@@ -183,6 +184,7 @@ end
 
 _global_series_state_functions(fn::typeof(compute_strain_rate)) = (fn, )
 _global_series_state_functions(fn::typeof(compute_volumetric_strain_rate)) = (fn, )
+_global_series_state_functions(fn::typeof(compute_lambda)) = (fn, )
 _global_series_state_functions(::F) where F<:Function = ()
 
 @generated function global_series_state_functions(funs::NTuple{N, Any}) where N
@@ -224,6 +226,7 @@ end
 
 
 function main(composite, vars, args_solve, args_other)
+
     funs_all           = series_state_functions(composite)
     funs_global        = global_series_state_functions(funs_all)
     args_global        = all_differentiable_kwargs(funs_global)
@@ -290,7 +293,7 @@ viscous1   = LinearViscosity(5e19)
 viscous2   = LinearViscosity(1e20)
 powerlaw   = PowerLawViscosity(5e19, 3)
 elastic    = Elasticity(1e10, 1e12) # im making up numbers
-case       = :case3
+case       = :case4
 
 composite, vars, args_solve, args_other = if case === :case1 
     composite  = viscous1, powerlaw
@@ -310,6 +313,13 @@ elseif case === :case3
     composite  = viscous1, elastic, powerlaw
     vars       = (; ε  = 1e-15, θ = 1e-20) # input variables
     args_solve = (; τ  = 1e2,   P = 1e6  ) # we solve for this, initial guess
+    args_other = (; dt = 1e10) # other args that may be needed, non differentiable
+    composite, vars, args_solve, args_other
+
+elseif case === :case4
+    composite  = viscous1, elastic, powerlaw, drucker
+    vars       = (; ε  = 1e-15, θ = 1e-20, λ = 0.0) # input variables
+    args_solve = (; τ  = 1e2,   P = 1e6, λ = 0.0) # we solve for this, initial guess
     args_other = (; dt = 1e10) # other args that may be needed, non differentiable
     composite, vars, args_solve, args_other
 end
