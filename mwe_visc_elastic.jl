@@ -71,6 +71,14 @@ end
 end
 
 getindex_tuple(x, inds::NTuple{N, Int}) where N = ntuple(i -> x[inds[i]], Val(N))
+
+function getindex_tuple(x, inds::NTuple{N, Int}) where N 
+    ntuple(Val(N)) do i 
+        ind = inds[i]
+        iszero(ind) ? zero(eltype(x)) :  x[ind]
+    end
+end
+
 @generated function generate_subtractor(x::SVector{N, T}, inds::NTuple{N, Int}) where {N,T}
     quote
         Base.@nexprs $N i -> x_i = iszero(inds[i]) ? zero(T) : x[inds[i]]
@@ -89,13 +97,16 @@ end
     quote
         @inline 
         Base.@ntuple $N i -> begin
-            xᵢ = getindex_tuple(x, inds_args_to_x[i]) 
+            ind = inds_args_to_x[i]
+            xᵢ = getindex_tuple(x, ind) 
             _generate_args_from_x(xᵢ, args_template[i], args_all[i])
         end
     end
 end
+@inline generate_args_from_x(::SVector, ::Tuple{}, ::Any, ::Tuple{}) = (;)
 
-generate_args_from_x(::SVector, ::Tuple{}, ::Any, ::Tuple{}) = (;)
+generate_args_from_x(x, inds_args_to_x, args_template, args_all)
+
 
 @generated function mapping_x_to_subtractor(state_funs::NTuple{N1, Any}, unique_funs_local::NTuple{N2, Any}) where {N1, N2}
     quote
@@ -185,21 +196,29 @@ _global_series_state_functions(::F) where F<:Function = ()
     end
 end
 
-function generate_indices_from_args_to_x(funs_local, reduction_ind, ::Val{N_reductions}) where N_reductions
-    tuple(
-        ntuple(i -> reduction_ind[i] .+ N_reductions, Val(N_reductions))...,
-        ntuple(x -> (x + N_reductions,), Val(length(funs_local)))...,
-    )
+function generate_indices_from_args_to_x(funs_local::NTuple{N, Any}, reduction_ind, ::Val{N_reductions}) where {N, N_reductions}
+    inds_global = ntuple(Val(N_reductions)) do i 
+        @inline
+         i ≤ N ? reduction_ind[i] .+ N_reductions : (0,)
+    end
+    inds_local = ntuple(x -> (x + N_reductions,), Val(N))
+    
+    tuple(inds_global...,  inds_local...)
 end
+
 @inline generate_indices_from_args_to_x(::Tuple{}, ::Tuple{}, ::Val) = ()
 
-function generate_args_state_functions(reduction_ind, local_x, ::Val{N_reductions}) where N_reductions
+function generate_args_state_functions(reduction_ind::NTuple{N}, local_x, ::Val{N_reductions}) where {N, N_reductions}
     ntuple(Val(N_reductions)) do i
         @inline
-        ntuple(Val(length(reduction_ind[i]))) do j
-            @inline
-            ind = reduction_ind[i][j]
-            local_x[ind]
+        if i ≤ N
+            ntuple(Val(length(reduction_ind[i]))) do j
+                @inline
+                ind = reduction_ind[i][j]
+                local_x[ind]
+            end
+        else
+            (zero(eltype(local_x)),)
         end
     end
 end
@@ -234,23 +253,27 @@ function main(composite, vars, args_solve, args_other)
     args_reduction       = ntuple(_ -> (), Val(N_reductions))
     state_funs           = merge_funs(state_reductions, funs_local)
 
+    # indices that map the local functions to the respective reduction of the state functions
     reduction_ind        = reduction_funs_args_indices(funs_local, unique_funs_local)
 
     N                    = length(state_funs)
     subtractor_vars      = SVector{N}(i ≤ N_reductions ? values(vars)[i] : 0e0 for i in 1:N)
 
     inds_args_to_x       = generate_indices_from_args_to_x(funs_local, reduction_ind, Val(N_reductions))
+    # inds_args_to_x       = generate_indices_from_args_to_x(funs_local, reduction_ind, Val(N_reductions))
 
+    # mapping from the state functions to the subtractor
     inds_x_to_subtractor = mapping_x_to_subtractor(state_funs, unique_funs_local)
 
     local_x  = SA[Base.IteratorsMD.flatten(values.(vars_local))...]
     global_x = SA[values(args_solve)...]
     x        = SA[global_x..., local_x...]
 
-    args_state = generate_args_state_functions(reduction_ind, local_x,  Val(N_reductions)) 
+    # this are the values from the local components that need to be sumed in the state functions, i.e. in compute_strain_rate / compute_volumetric_strain_rate
+    args_state_reductions = generate_args_state_functions(reduction_ind, local_x,  Val(N_reductions))
     
     # 
-    args_all      = tuple(args_state..., args_local_aug...)
+    args_all      = tuple(args_state_reductions..., args_local_aug...)
     # template for args to do pattern matching later
     args_template = tuple(args_reduction..., args_local...)
 
@@ -263,16 +286,15 @@ function main(composite, vars, args_solve, args_other)
         AutoForwardDiff(), 
         x
     )
-    # J
     J \ R
-
+    J
 end
 
 viscous1   = LinearViscosity(5e19)
 viscous2   = LinearViscosity(1e20)
 powerlaw   = PowerLawViscosity(5e19, 3)
 elastic    = Elasticity(1e10, 1e12) # im making up numbers
-case       = :case2
+case       = :case3
 
 composite, vars, args_solve, args_other = if case === :case1 
     composite  = viscous1, powerlaw
@@ -301,10 +323,10 @@ main(composite, vars, args_solve, args_other)
 # @b main($(composite, vars, args_solve, args_other)...)
 
 # # function eval_residual(x, composite_expanded, composite_global, state_funs, unique_funs_global, subtractor_vars, inds_x_to_subtractor, inds_args_to_x, args_template, args_all, args_solve, args_other)
-#     subtractor        = generate_subtractor(x, inds_x_to_subtractor)
-#     args_tmp          = generate_args_from_x(x, inds_args_to_x, args_template, args_all)
-#     args_solve2       = merge(update_args2(args_solve, x), args_other)
-#     subtractor_global = generate_subtractor_global(composite_global, state_funs, unique_funs_global, args_solve2)
+    # subtractor        = generate_subtractor(x, inds_x_to_subtractor)
+    # args_tmp          = generate_args_from_x(x, inds_args_to_x, args_template, args_all)
+    # args_solve2       = merge(update_args2(args_solve, x), args_other)
+    # subtractor_global = generate_subtractor_global(composite_global, state_funs, unique_funs_global, args_solve2)
     
 #     eval_state_functions(state_funs, composite_expanded, args_tmp) - subtractor - subtractor_vars + subtractor_global
 # # end
