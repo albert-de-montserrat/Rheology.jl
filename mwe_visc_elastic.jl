@@ -169,9 +169,9 @@ end
     end
 end
 
-_local_series_state_functions(::typeof(compute_strain_rate)) = ()
-_local_series_state_functions(::typeof(compute_volumetric_strain_rate)) = ()
-_local_series_state_functions(::typeof(compute_lambda)) = ()
+for fn in (:compute_strain_rate, :compute_volumetric_strain_rate, :compute_lambda)
+    @eval _local_series_state_functions(::typeof($fn)) = ()
+end
 _local_series_state_functions(fn::F) where F<:Function = (fn,)
 
 @generated function local_series_state_functions(funs::NTuple{N, Any}) where N
@@ -293,6 +293,8 @@ viscous1   = LinearViscosity(5e19)
 viscous2   = LinearViscosity(1e20)
 powerlaw   = PowerLawViscosity(5e19, 3)
 elastic    = Elasticity(1e10, 1e12) # im making up numbers
+drucker    = DruckerPrager(1e6, 10.0, 0.0)
+
 case       = :case4
 
 composite, vars, args_solve, args_other = if case === :case1 
