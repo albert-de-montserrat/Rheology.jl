@@ -233,6 +233,7 @@ function main(composite, vars, args_solve, args_other)
     state_reductions     = ntuple(i -> state_var_reduction, Val(N_reductions))
     args_reduction       = ntuple(_ -> (), Val(N_reductions))
     state_funs           = merge_funs(state_reductions, funs_local)
+
     reduction_ind        = reduction_funs_args_indices(funs_local, unique_funs_local)
 
     N                    = length(state_funs)
@@ -242,9 +243,9 @@ function main(composite, vars, args_solve, args_other)
 
     inds_x_to_subtractor = mapping_x_to_subtractor(state_funs, unique_funs_local)
 
-    local_x = SA[Base.IteratorsMD.flatten(values.(vars_local))...]
-    state_x = SA[values(args_solve)...]
-    x       = SA[state_x..., local_x...]
+    local_x  = SA[Base.IteratorsMD.flatten(values.(vars_local))...]
+    global_x = SA[values(args_solve)...]
+    x        = SA[global_x..., local_x...]
 
     args_state = generate_args_state_functions(reduction_ind, local_x,  Val(N_reductions)) 
     
@@ -271,7 +272,7 @@ viscous1   = LinearViscosity(5e19)
 viscous2   = LinearViscosity(1e20)
 powerlaw   = PowerLawViscosity(5e19, 3)
 elastic    = Elasticity(1e10, 1e12) # im making up numbers
-case       = :case3
+case       = :case2
 
 composite, vars, args_solve, args_other = if case === :case1 
     composite  = viscous1, powerlaw
@@ -288,7 +289,7 @@ elseif case === :case2
     composite, vars, args_solve, args_other
 
 elseif case === :case3
-    composite  = viscous1, powerlaw, elastic
+    composite  = viscous1, elastic, powerlaw
     vars       = (; ε  = 1e-15, θ = 1e-20) # input variables
     args_solve = (; τ  = 1e2,   P = 1e6  ) # we solve for this, initial guess
     args_other = (; dt = 1e10) # other args that may be needed, non differentiable
@@ -307,6 +308,8 @@ main(composite, vars, args_solve, args_other)
     
 #     eval_state_functions(state_funs, composite_expanded, args_tmp) - subtractor - subtractor_vars + subtractor_global
 # # end
+
+# eval_state_functions(state_funs, composite_expanded, args_tmp)
 
 # eval_residual(x, composite_expanded, composite_global, state_funs, unique_funs_global, subtractor_vars, inds_x_to_subtractor, inds_args_to_x, args_template, args_all, args_solve, args_other)
 

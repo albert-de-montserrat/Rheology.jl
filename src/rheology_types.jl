@@ -157,7 +157,8 @@ end
     end
 end
 
-@inline eval_state_functions(::NTuple{N, Any}, ::Any, ::NamedTuple{}) where {N} = @SVector zeros(N)
+@inline eval_state_functions(::Tuple{Vararg{Any, N}}, ::NTuple{N, AbstractRheology}, ::@NamedTuple{}) where N = @SVector zeros(N)
+
 
 @generated function flatten_repeated_functions(funs::NTuple{N, Any}) where {N}
     quote
