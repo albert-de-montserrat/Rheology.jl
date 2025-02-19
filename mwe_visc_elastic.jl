@@ -169,9 +169,9 @@ end
     end
 end
 
-_local_series_state_functions(::typeof(compute_strain_rate)) = ()
-_local_series_state_functions(::typeof(compute_volumetric_strain_rate)) = ()
-_local_series_state_functions(::typeof(compute_lambda)) = ()
+for fn in (:compute_strain_rate, :compute_volumetric_strain_rate, :compute_lambda)
+    @eval _local_series_state_functions(::typeof($fn)) = ()
+end
 _local_series_state_functions(fn::F) where F<:Function = (fn,)
 
 @generated function local_series_state_functions(funs::NTuple{N, Any}) where N
