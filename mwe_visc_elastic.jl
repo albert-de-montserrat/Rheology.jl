@@ -258,7 +258,8 @@ function main(composite, vars, args_solve0, args_other)
     reduction_ind        = reduction_funs_args_indices(funs_local, unique_funs_local)
 
     N                    = length(state_funs)
-    subtractor_vars      = SVector{N}(i ≤ N_reductions ? values(vars)[i] : 0e0 for i in 1:N)
+    N_reductions0        = min(N_reductions, length(vars))  # to be checked
+    subtractor_vars      = SVector{N}(i ≤ N_reductions0 ? values(vars)[i] : 0e0 for i in 1:N)
 
     inds_args_to_x       = generate_indices_from_args_to_x(funs_local, reduction_ind, Val(N_reductions))
 
@@ -320,14 +321,14 @@ elseif case === :case3
 
 elseif case === :case4
     composite  = viscous1, drucker
-    vars       = (; ε  = 1e-15, θ = 1e-20, λ = 0.0) # input variables
+    vars       = (; ε  = 1e-15, θ = 1e-20) # input variables
     args_solve = (; τ  = 1e2, ) # we solve for this, initial guess
     args_other = (; dt = 1e10) # other args that may be needed, non differentiable
     composite, vars, args_solve, args_other
 
 elseif case === :case5
     composite  = viscous1, elastic, powerlaw, drucker
-    vars       = (; ε  = 1e-15, θ = 1e-20, λ = 0.0) # input variables
+    vars       = (; ε  = 1e-15, θ = 1e-20) # input variables
     args_solve = (; τ  = 1e2,   P = 1e6,) # we solve for this, initial guess
     args_other = (; dt = 1e10) # other args that may be needed, non differentiable
     composite, vars, args_solve, args_other
