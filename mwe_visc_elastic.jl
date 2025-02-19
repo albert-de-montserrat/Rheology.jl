@@ -225,10 +225,11 @@ end
 @inline generate_args_state_functions(::Tuple{}, ::Any, ::Val) = ()
 
 
-function main(composite, vars, args_solve, args_other)
+function main(composite, vars, args_solve0, args_other)
 
     funs_all           = series_state_functions(composite)
     funs_global        = global_series_state_functions(funs_all)
+    args_solve         = merge(differentiable_kwargs(funs_global),args_solve0)
     args_global        = all_differentiable_kwargs(funs_global)
     # vars_global        = vars
     unique_funs_global = flatten_repeated_functions(funs_global)
@@ -292,8 +293,9 @@ end
 viscous1   = LinearViscosity(5e19)
 viscous2   = LinearViscosity(1e20)
 powerlaw   = PowerLawViscosity(5e19, 3)
+drucker    = DruckerPrager(1e6, 10.0, 0.0)
 elastic    = Elasticity(1e10, 1e12) # im making up numbers
-case       = :case4
+case       = :case5
 
 composite, vars, args_solve, args_other = if case === :case1 
     composite  = viscous1, powerlaw
@@ -317,9 +319,16 @@ elseif case === :case3
     composite, vars, args_solve, args_other
 
 elseif case === :case4
+    composite  = viscous1, drucker
+    vars       = (; ε  = 1e-15, θ = 1e-20, λ = 0.0) # input variables
+    args_solve = (; τ  = 1e2, ) # we solve for this, initial guess
+    args_other = (; dt = 1e10) # other args that may be needed, non differentiable
+    composite, vars, args_solve, args_other
+
+elseif case === :case5
     composite  = viscous1, elastic, powerlaw, drucker
     vars       = (; ε  = 1e-15, θ = 1e-20, λ = 0.0) # input variables
-    args_solve = (; τ  = 1e2,   P = 1e6, λ = 0.0) # we solve for this, initial guess
+    args_solve = (; τ  = 1e2,   P = 1e6,) # we solve for this, initial guess
     args_other = (; dt = 1e10) # other args that may be needed, non differentiable
     composite, vars, args_solve, args_other
 end
