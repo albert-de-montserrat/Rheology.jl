@@ -85,7 +85,7 @@ end
         Base.@ncall $N merge nt
     end
 end
-
+differentiable_kwargs(::Type{T}, funs::NTuple{0, Any}) where T = (;)
 
 @inline all_differentiable_kwargs(funs::NTuple{N, Any}) where N = all_differentiable_kwargs(Float64, funs)
 

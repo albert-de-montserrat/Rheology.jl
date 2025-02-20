@@ -295,6 +295,8 @@ end
 
 viscous1   = LinearViscosity(5e19)
 viscous2   = LinearViscosity(1e20)
+viscous1_s = LinearViscosityStress(5e19)
+
 powerlaw   = PowerLawViscosity(5e19, 3)
 drucker    = DruckerPrager(1e6, 10.0, 0.0)
 elastic    = Elasticity(1e10, 1e12) # im making up numbers
@@ -323,7 +325,7 @@ elseif case === :case3
 
 elseif case === :case4
     composite  = viscous1, drucker
-    vars       = (; ε  = 1e-15, θ = 1e-20) # input variables
+    vars       = (; ε  = 1e-15, ) # input variables
     args_solve = (; τ  = 1e2, ) # we solve for this, initial guess
     args_other = (; dt = 1e10) # other args that may be needed, non differentiable
     composite, vars, args_solve, args_other
@@ -335,12 +337,14 @@ elseif case === :case5
     args_other = (; dt = 1e10) # other args that may be needed, non differentiable
     composite, vars, args_solve, args_other
 
+
 elseif case === :case6
     composite  = powerlaw, powerlaw
-    vars       = (; ε  = 1e-15) # input variables
-    args_solve = (; τ  = 1e2) # we solve for this, initial guess
-    args_other = (; ) # other args that may be needed, non differentiable
+    vars       = (; ε  = 1e-15, θ = 1e-20) # input variables
+    args_solve = (; τ  = 1e2,   P = 1e6,) # we solve for this, initial guess
+    args_other = (; dt = 1e10) # other args that may be needed, non differentiable
     composite, vars, args_solve, args_other
+
 end
 
 main(composite, vars, args_solve0, args_other)
