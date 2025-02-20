@@ -25,8 +25,6 @@ function bt_line_search(Δx, J, R, statefuns, composite::NTuple{N, Any}, args, v
     return α
 end
 
-
-
 function eval_residual(x, composite_expanded, composite_global, state_funs, unique_funs_global, subtractor_vars, inds_x_to_subtractor, inds_args_to_x, args_template, args_all, args_solve, args_other)
     subtractor        = generate_subtractor(x, inds_x_to_subtractor)
     args_tmp          = generate_args_from_x(x, inds_args_to_x, args_template, args_all)
@@ -53,6 +51,8 @@ end
         SVector{$N1, type}(v)
     end
 end
+
+@inline generate_subtractor_global(::Tuple{}, ::NTuple{N1, Any}, ::NTuple{N2, Any}, ::Any) where {N1, N2, N3} = @SVector zeros(N1)
 
 @inline state_var_reduction(::AbstractRheology, x::NTuple{N, T}) where {T<:Number, N} = sum(x[i] for i in 1:N)
 
@@ -224,12 +224,13 @@ end
  
 @inline generate_args_state_functions(::Tuple{}, ::Any, ::Val) = ()
 
+@inline differentiable_kwargs(::Type{T}, ::typeof(state_var_reduction))                    where T = (; )
 
 function main(composite, vars, args_solve0, args_other)
 
     funs_all           = series_state_functions(composite)
     funs_global        = global_series_state_functions(funs_all)
-    args_solve         = merge(differentiable_kwargs(funs_global),args_solve0)
+    args_solve         = merge(differentiable_kwargs(funs_global), args_solve0)
     args_global        = all_differentiable_kwargs(funs_global)
     # vars_global        = vars
     unique_funs_global = flatten_repeated_functions(funs_global)
@@ -249,7 +250,8 @@ function main(composite, vars, args_solve0, args_other)
         merge(args_local[i], args_other, vars)
     end
 
-    N_reductions         = length(unique_funs_global)
+    N_reductions         = length(unique_funs_local)
+    # N_reductions         = length(unique_funs_global)
     state_reductions     = ntuple(i -> state_var_reduction, Val(N_reductions))
     args_reduction       = ntuple(_ -> (), Val(N_reductions))
     state_funs           = merge_funs(state_reductions, funs_local)
@@ -296,9 +298,9 @@ viscous2   = LinearViscosity(1e20)
 powerlaw   = PowerLawViscosity(5e19, 3)
 drucker    = DruckerPrager(1e6, 10.0, 0.0)
 elastic    = Elasticity(1e10, 1e12) # im making up numbers
-case       = :case5
+case       = :case6
 
-composite, vars, args_solve, args_other = if case === :case1 
+composite, vars, args_solve0, args_other = if case === :case1 
     composite  = viscous1, powerlaw
     vars       = (; ε  = 1e-15) # input variables
     args_solve = (; τ  = 1e2  ) # we solve for this, initial guess
@@ -332,7 +334,14 @@ elseif case === :case5
     args_solve = (; τ  = 1e2,   P = 1e6,) # we solve for this, initial guess
     args_other = (; dt = 1e10) # other args that may be needed, non differentiable
     composite, vars, args_solve, args_other
+
+elseif case === :case6
+    composite  = powerlaw, powerlaw
+    vars       = (; ε  = 1e-15) # input variables
+    args_solve = (; τ  = 1e2) # we solve for this, initial guess
+    args_other = (; ) # other args that may be needed, non differentiable
+    composite, vars, args_solve, args_other
 end
 
-main(composite, vars, args_solve, args_other)
+main(composite, vars, args_solve0, args_other)
 # @b main($(composite, vars, args_solve, args_other)...)
