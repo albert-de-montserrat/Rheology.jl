@@ -4,7 +4,7 @@
 #set math.equation(numbering: "(1.1)")
 #set heading(numbering: "1.1")
 
-= Problem
+= Problem 1: series
 $
   epsilon = 1 / (2 eta) tau + 1 / (2 G Delta t) tau + epsilon^("pl")
 $
@@ -34,14 +34,13 @@ $
 
 $
   J = mat(
-    1 / (2 eta) + 1 / (2 G Delta t), 0,                                                        1;
+    1 / (2 eta) + 1 / (2 G Delta t), 0,                                         1;
     0,                       P^"o"/(K Delta t),                                        0;
    -1,                       0,                 ((2 eta)^(1/n) epsilon^"pl"^(1/n-1)) / n;
   )
 $
 
-
-= Implementation
+== Implementation
 
 Need to tear the residual into several pieces
 
@@ -89,3 +88,136 @@ $
   (4,);
   ) 
 $
+
+
+= Problem 2: series(visco)-parallel(visco-power law)
+
+Total strain rate $epsilon$:
+$
+  epsilon = epsilon^"viscous" + epsilon^"parallel" = 1 / (2 eta_1) tau + epsilon^("p")
+$
+Total stress
+$
+  tau = tau_2 + tau_3 = 2 eta _2 epsilon^("p") + (2 eta _2 epsilon^("p"))^n
+$
+Strain rates of the individual elements in parallel
+$
+  epsilon^("p") = 1 / (2 eta_2) tau_2 arrow tau_2 = 2 eta _2 epsilon^("p")
+$
+$
+  epsilon^("p") = 1 / (2 eta_3) tau_3^n arrow tau_3 = (2 eta _3 epsilon^("p"))^n
+$
+
+Then 
+$
+  x = mat(
+    tau;
+    epsilon^("p");
+  )
+$
+
+$
+  r = mat(
+    r(tau);
+    r(epsilon^("p"));
+  ) = mat(
+    -tau + 2 eta _2 epsilon^("p") + (2 eta _2 epsilon^("p"))^n;
+    -epsilon + 1 / (2 eta_1) tau + epsilon^("p");
+  )
+$
+$
+  J = mat(
+    2 eta _2 + (2 eta _2)^(n) n epsilon^"p"^(n-1), -1;
+    1, 1 / (2 eta_1),;
+  )
+$
+
+== What do we need
+
++ Compute_strain_rate where we sum for all the individual series elements, and add one unknown per parallel element $
+  r(epsilon^"p") = sum_i^N^"series" epsilon_i^"series" + epsilon_1^"parallel" + dots.h + epsilon_(N^"parallel")^"parallel"
+$ which is better split into $
+  r(epsilon^"p") = r_1(epsilon^"series") + r_2(epsilon^"parallel")
+$ where $r_1$ can be pre-computed as it is constant thrughout the Newton iterations.
+
++ Mapping that indicates where the required $epsilon_(i^"parallel")^"parallel"$ are needed in the system of equations
+$
+  "local variable to system of equations mapping" =  mat(
+    (2,);
+    (2,);
+  )
+$ If we had something like
+$
+  x = mat(
+    tau;
+    epsilon_1^("p");
+    epsilon_2^("p");
+  )
+$ Then
+$
+  "local variable to system of equations mapping" =  mat(
+    (2,3);
+    (2,);
+    (3,);
+  )
+$
+
+
+
+// $
+//   x = mat(
+//     tau;
+//     epsilon^("p");
+//     tau_1;
+//     tau_2;
+//   )
+// $
+
+// $
+//   r = mat(
+//     r(epsilon^("p"));
+//     r(tau);
+//     r(tau_2);
+//     r(tau_3);
+//   ) = mat(
+//     -epsilon + 1 / (2 eta_1) tau + epsilon^("p");
+//     -tau + 2 eta _2 epsilon^("p") + (2 eta _2 epsilon^("p"))^n;
+//     -tau_2 + 2 eta _2 epsilon^("p");
+//     -tau_3 + (2 eta _3 epsilon^("p"))^n;
+//   )
+// $
+// $
+//   J = mat(
+//     1, 1 / (2 eta_1), 0, 0;
+//     2 eta _2 + (2 eta _2)^(n) n epsilon^"p"^(n-1), -1, 0, 0;
+//     2 eta _2 + (2 eta _2)^(n) n epsilon^"p", -1, 0, 0;
+//   )
+// $
+
+// or 
+// $
+//   tau = sum_i^N^p tau_i = 2 eta _2 epsilon^("p") + (2 eta _2 epsilon^("p"))^n
+// $
+
+// $
+//   x = mat(
+//     tau;
+//     P;
+//     epsilon^("pl");
+//   )
+// $
+// $
+//   r = mat(
+//     -epsilon + 1 / (2 eta) tau + 1 / (2 G Delta t) tau + epsilon^("pl");
+//     -theta + 1/(K Delta t)(P-P^"o");
+//     -tau + (2 eta epsilon^("pl"))^(1/n);
+//   )
+// $
+
+// $
+//   J = mat(
+//     1 / (2 eta) + 1 / (2 G Delta t), 0,                                         1;
+//     0,                       P^"o"/(K Delta t),                                        0;
+//    -1,                       0,                 ((2 eta)^(1/n) epsilon^"pl"^(1/n-1)) / n;
+//   )
+// $
