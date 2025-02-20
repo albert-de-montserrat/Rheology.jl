@@ -34,6 +34,7 @@ function eval_residual(x, composite_expanded, composite_global, state_funs, uniq
     eval_state_functions(state_funs, composite_expanded, args_tmp) - subtractor - subtractor_vars + subtractor_global
 end
 
+
 @generated function generate_subtractor_global(composite_global::NTuple{N3, AbstractRheology}, state_funs::NTuple{N1, Any}, unique_funs_global::NTuple{N2, Any}, args_solve) where {N1, N2, N3}
     quote
         @inline
@@ -52,7 +53,8 @@ end
     end
 end
 
-@inline generate_subtractor_global(::Tuple{}, ::NTuple{N1, Any}, ::NTuple{N2, Any}, ::Any) where {N1, N2, N3} = @SVector zeros(N1)
+@inline generate_subtractor_global(::Tuple{}, ::NTuple{N1, Any}, ::NTuple{N2, Any}, ::Any) where {N1, N2} = @SVector zeros(N1)
+@inline generate_subtractor_global(::NTuple{N1, AbstractRheology}, ::Tuple{}, ::NTuple{N2, Any}, ::Any) where {N1, N2} = @SVector zeros(N2)
 
 @inline state_var_reduction(::AbstractRheology, x::NTuple{N, T}) where {T<:Number, N} = sum(x[i] for i in 1:N)
 
@@ -70,10 +72,11 @@ end
     end
 end
 
-getindex_tuple(x, inds::NTuple{N, Int}) where N = ntuple(i -> x[inds[i]], Val(N))
+@inline getindex_tuple(x, inds::NTuple{N, Int}) where N = ntuple(i -> x[inds[i]], Val(N))
 
 function getindex_tuple(x, inds::NTuple{N, Int}) where N 
     ntuple(Val(N)) do i 
+        @inline 
         ind = inds[i]
         iszero(ind) ? zero(eltype(x)) :  x[ind]
     end
@@ -81,13 +84,16 @@ end
 
 @generated function generate_subtractor(x::SVector{N, T}, inds::NTuple{N, Int}) where {N,T}
     quote
+        @inline 
         Base.@nexprs $N i -> x_i = iszero(inds[i]) ? zero(T) : x[inds[i]]
         Base.@ncall $N SVector x
     end 
 end
 
+@inline generate_subtractor(x::SVector{N, T}, ::Tuple{}) where {N, T} = zero(x)
 
-_generate_args_from_x(xᵢ::NTuple{N, Number}, ::Tuple{}, ::Any) where N = xᵢ
+@inline _generate_args_from_x(xᵢ::NTuple{N, Number}, ::Tuple{}, ::Any) where N = xᵢ
+
 function _generate_args_from_x(xᵢ::NTuple{N, Number}, args_templateᵢ::NamedTuple, args_allᵢ::NamedTuple) where N
     tmp = (; zip(keys(args_templateᵢ), xᵢ)...)
     merge(args_allᵢ, tmp)
@@ -250,8 +256,9 @@ function main(composite, vars, args_solve0, args_other)
         merge(args_local[i], args_other, vars)
     end
 
-    N_reductions         = length(unique_funs_local)
+    # N_reductions         = length(unique_funs_local)
     # N_reductions         = length(unique_funs_global)
+    N_reductions         = length(vars)
     state_reductions     = ntuple(i -> state_var_reduction, Val(N_reductions))
     args_reduction       = ntuple(_ -> (), Val(N_reductions))
     state_funs           = merge_funs(state_reductions, funs_local)
@@ -340,8 +347,8 @@ elseif case === :case5
 
 elseif case === :case6
     composite  = powerlaw, powerlaw
-    vars       = (; ε  = 1e-15, θ = 1e-20) # input variables
-    args_solve = (; τ  = 1e2,   P = 1e6,) # we solve for this, initial guess
+    vars       = (; ε  = 1e-15) # input variables
+    args_solve = (; τ  = 1e2) # we solve for this, initial guess
     args_other = (; dt = 1e10) # other args that may be needed, non differentiable
     composite, vars, args_solve, args_other
 
