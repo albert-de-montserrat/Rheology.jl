@@ -140,7 +140,7 @@ function main(composite, vars, args_solve0, args_other)
     # Compute the residual vector
     #eval_state_function(funs_elements[1], composite[1], args_elements[1])
 
-    return  var_names, var_elems, funs_elements, entry_residual, x, args_elements
+    return  var_names, var_elems, funs_elements, entry_residual, x, args_elements_aug, vars_ε, vars_θ
 end
 
 
@@ -212,44 +212,41 @@ end
 
 
 #@btime main($(composite, vars, args_solve, args_other)...)
-var_names, var_elems, funs_elements, entry_residual, x, args_elements = main((composite, vars, args_solve, args_other)...)
+var_names, var_elems, funs_elements, entry_residual, x, args_elements, vars_ε, vars_θ = main((composite, vars, args_solve, args_other)...)
 
 
 # compute the residual vector
-function eval_residual(x, composite, args_elements, funs_elements, entry_residual, vars)
-    res = zeros(length(x))
-    res[1] = -vars.ε
+function eval_residual(x, composite::NTuple{N,Any}, args_elements::NTuple{N,Any}, funs_elements::NTuple{N,Any}, entry_residual, vars, vars_ε, vars_θ) where N
+    res     = zeros(length(x))
+    res[1]  = -vars.ε
     #if any(iscompressible.(composite))
     #    res[2] = -vars.θ
     #end
+    # deal with strainrate and volumetric strainrate component
+    for i=1:length(x)
+        if vars_ε[i]
+            res[1]  += x[i]
+            res[i] = -x[i]
+        end
+        if vars_θ[i]
+            res[2]  += x[i]
+            res[i] = -x[i]
+        end
+    end
     
-    for el=1:length(composite)
+    for el=1:N
         args_local = args_elements[el]
         for i=1:length(funs_elements[el])
-            @show el, i, args_local, eval_state_function(funs_elements[el][i], composite[el], args_local)
+            #@show el, i, args_local, eval_state_function(funs_elements[el][i], composite[el], args_local)
             res[entry_residual[el][i]] += eval_state_function(funs_elements[el][i], composite[el], args_local)
         end
     end
 
+
     return res
 end
 
-#=
-res = zeros(length(x))
-res[1] = -vars.ε
-#if any(iscompressible.(composite))
-#    res[2] = -vars.θ
-#end
-
-for el=1:length(composite)
-    args_local = args_elements[el]
-    for i=1:length(funs_elements[el])
-        @show el, i, args_local, eval_state_function(funs_elements[el][i], composite[el], args_local)
-        res[entry_residual[el][i]] += eval_state_function(funs_elements[el][i], composite[el], args_local)
-    end
-end
-=#
-#eval_residual(x, composite, args_elements, funs_elements, entry_residual, vars)
+eval_residual(x, composite, args_elements, funs_elements, entry_residual, vars, vars_ε, vars_θ)
 
 
 
