@@ -145,7 +145,7 @@ viscous1_s = LinearViscosityStress(5e19)
 powerlaw   = PowerLawViscosity(5e19, 3)
 drucker    = DruckerPrager(1e6, 10.0, 0.0)
 elastic    = Elasticity(1e10, 1e12) # im making up numbers
-case       = :case2
+case       = :case7
 
 composite, vars, args_solve0, args_other = if case === :case1 
     composite  = viscous1, powerlaw
@@ -204,7 +204,6 @@ elseif case === :case8
     args_other = (; ) # other args that may be needed, non differentiable
     composite, vars, args_solve, args_other
 end
-
 
 
 #@btime main($(composite, vars, args_solve, args_other)...)
