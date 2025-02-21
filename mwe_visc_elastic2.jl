@@ -37,7 +37,7 @@ function eval_residual(x, composite_expanded, composite_global, state_funs, uniq
 end
 =#
 
-function statefuns_to_residual_series(statefuns::NTuple{N, Any}, n=1) where N
+function statefuns_to_residual_series(funs_elements::NTuple{N, Any}, n=1) where N
     # this allocates - to be fixed!
     el_local = ()
     for statefuns in funs_elements
@@ -70,6 +70,11 @@ function main(composite, vars, args_solve0, args_other)
     # add solution arguments
     args_elements    = ntuple(Val(length(args_elements0))) do i 
         merge(args_elements0[i], args_solve0)
+    end
+
+    # augment 
+    args_elements_aug    = ntuple(Val(length(args_elements0))) do i 
+        merge(args_elements[i], args_other)
     end
 
     # determine if we iterate for τ, for P or for both. 
@@ -192,16 +197,16 @@ elseif case === :case6
 elseif case === :case7
     composite  = viscous1, viscous2, drucker, drucker, elastic, powerlaw
     vars       = (; ε  = 1e-15) # input variables
-    args_solve = (; τ  = 1e2) # we solve for this, initial guess
-    args_other = (; ) # other args that may be needed, non differentiable
+    args_solve = (; τ  = 1e2, P = 10.0) # we solve for this, initial guess
+    args_other = (; τ0  = 1.0, P0 = 1.0, dt = 1.0) # other args that may be needed, non differentiable
     composite, vars, args_solve, args_other
 
 
 elseif case === :case8
     composite  = viscous1, viscous2
     vars       = (; ε  = 1e-15) # input variables
-    args_solve = (; τ  = 1e2) # we solve for this, initial guess
-    args_other = (; ) # other args that may be needed, non differentiable
+    args_solve = (; τ  = 1e2,) # we solve for this, initial guess
+    args_other = (; dt = 1.0) # other args that may be needed, non differentiable
     composite, vars, args_solve, args_other
 end
 
@@ -209,6 +214,42 @@ end
 #@btime main($(composite, vars, args_solve, args_other)...)
 var_names, var_elems, funs_elements, entry_residual, x, args_elements = main((composite, vars, args_solve, args_other)...)
 
+
+# compute the residual vector
+function eval_residual(x, composite, args_elements, funs_elements, entry_residual, vars)
+    res = zeros(length(x))
+    res[1] = -vars.ε
+    #if any(iscompressible.(composite))
+    #    res[2] = -vars.θ
+    #end
+    
+    for el=1:length(composite)
+        args_local = args_elements[el]
+        for i=1:length(funs_elements[el])
+            @show el, i, args_local, eval_state_function(funs_elements[el][i], composite[el], args_local)
+            res[entry_residual[el][i]] += eval_state_function(funs_elements[el][i], composite[el], args_local)
+        end
+    end
+
+    return res
+end
+
+#=
+res = zeros(length(x))
+res[1] = -vars.ε
+#if any(iscompressible.(composite))
+#    res[2] = -vars.θ
+#end
+
+for el=1:length(composite)
+    args_local = args_elements[el]
+    for i=1:length(funs_elements[el])
+        @show el, i, args_local, eval_state_function(funs_elements[el][i], composite[el], args_local)
+        res[entry_residual[el][i]] += eval_state_function(funs_elements[el][i], composite[el], args_local)
+    end
+end
+=#
+#eval_residual(x, composite, args_elements, funs_elements, entry_residual, vars)
 
 
 
