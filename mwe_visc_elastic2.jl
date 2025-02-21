@@ -127,12 +127,13 @@ function main(composite, vars, args_solve0, args_other)
     # The rheological elemnt to which this solution variable belongs 
     var_elems   = (ntuple(j -> 0, Val(length(iteration_vars)))..., Base.IteratorsMD.flatten(el_local)...);
 
-    # Initial values for each of the variables
-    x           = SA[ Base.IteratorsMD.flatten(values(iteration_vars))..., Base.IteratorsMD.flatten(values.(args_local))...]
-
     # extract variables that have :ε or :θ in the name (need to be summed separately in residual function)
     vars_ε      =   var_names .== :ε
     vars_θ      =   var_names .== :θ
+
+    
+    # Initial values for each of the variables
+    x           = SA[ Base.IteratorsMD.flatten(values(iteration_vars))..., Base.IteratorsMD.flatten(values.(args_local))...]
 
     # We now know the correct variable names and index numbers for each of the variables
    # @show var_names var_elems funs_elements entry_residual x
@@ -150,7 +151,7 @@ viscous1_s = LinearViscosityStress(5e19)
 powerlaw   = PowerLawViscosity(5e19, 3)
 drucker    = DruckerPrager(1e6, 10.0, 0.0)
 elastic    = Elasticity(1e10, 1e12) # im making up numbers
-case       = :case7
+case       = :case8
 
 composite, vars, args_solve0, args_other = if case === :case1 
     composite  = viscous1, powerlaw
@@ -198,7 +199,7 @@ elseif case === :case7
     composite  = viscous1, viscous2, drucker, drucker, elastic, powerlaw
     vars       = (; ε  = 1e-15) # input variables
     args_solve = (; τ  = 1e2, P = 10.0) # we solve for this, initial guess
-    args_other = (; τ0  = 1.0, P0 = 1.0, dt = 1.0) # other args that may be needed, non differentiable
+    args_other = (; τ0  = 1.0, P0 = 1.0, dt = 1.0, ε  = 1e-15) # other args that may be needed, non differentiable
     composite, vars, args_solve, args_other
 
 
@@ -216,8 +217,8 @@ var_names, var_elems, funs_elements, entry_residual, x, args_elements, vars_ε, 
 
 
 # compute the residual vector
-function eval_residual(x, composite::NTuple{N,Any}, args_elements::NTuple{N,Any}, funs_elements::NTuple{N,Any}, entry_residual, vars, vars_ε, vars_θ) where N
-    res     = zeros(length(x))
+function eval_residual(x, composite::NTuple{N,Any}, args_elements::NTuple{N,Any}, funs_elements::NTuple{N,Any}, entry_residual, vars, vars_ε, vars_θ, var_names, var_elems) where N
+    res     = zeros(eltype(x), length(x))
     res[1]  = -vars.ε
     #if any(iscompressible.(composite))
     #    res[2] = -vars.θ
@@ -233,11 +234,21 @@ function eval_residual(x, composite::NTuple{N,Any}, args_elements::NTuple{N,Any}
             res[i] = -x[i]
         end
     end
+
+    # update the arguments for each of the rheological elements
+    τ = x[1]
     
     for el=1:N
         args_local = args_elements[el]
+
+        # augment local arguments with solution vector variables
+        for j = 1:length(var_elems)
+            if (var_elems[j] == el || var_elems[j] == 0) & !vars_ε[j] & !vars_θ[j] 
+                args_local = merge(args_local, NamedTuple{(var_names[j],)}((x[j],)))
+            end
+        end
+        
         for i=1:length(funs_elements[el])
-            #@show el, i, args_local, eval_state_function(funs_elements[el][i], composite[el], args_local)
             res[entry_residual[el][i]] += eval_state_function(funs_elements[el][i], composite[el], args_local)
         end
     end
@@ -246,10 +257,51 @@ function eval_residual(x, composite::NTuple{N,Any}, args_elements::NTuple{N,Any}
     return res
 end
 
-eval_residual(x, composite, args_elements, funs_elements, entry_residual, vars, vars_ε, vars_θ)
+function eval_residual2(x::SVector{N1, _T}, composite::NTuple{N,Any}, args_elements::NTuple{N,Any}, funs_elements::NTuple{N,Any}, entry_residual, vars, vars_ε, vars_θ) where {N, N1, _T}
+    res     = MArray(zero(x))
+    res[1]  = -vars.ε
+    #if any(iscompressible.(composite))
+    #    res[2] = -vars.θ
+    #end
+    # deal with strainrate and volumetric strainrate component
+    for i=1:length(x)
+        if vars_ε[i]
+            res[1]  += x[i]
+            res[i] = -x[i]
+        end
+        if vars_θ[i]
+            res[2]  += x[i]
+            res[i] = -x[i]
+        end
+    end
+#=
+    
+    
+    ntuple(Val(N)) do el
+        @inline
+        args_local = args_elements[el]
+        tmp = entry_residual[el]
+        N2 = length(funs_elements[el])
+        ntuple(Val(N2)) do i
+            @inline
+            res[tmp[i]] += eval_state_function(funs_elements[el][i], composite[el], args_local)
+        end
+    end
+        =#
+    return SVector(res)
+end
 
 
+#@btime eval_residual2($x, $composite, $args_elements, $funs_elements, $entry_residual, $vars, $vars_ε, $vars_θ)
 
+#eval_residual2(x, composite, args_elements, funs_elements, entry_residual, vars, vars_ε, vars_θ)
+
+R, J = value_and_jacobian(        
+    x -> eval_residual(x, composite, args_elements, funs_elements, entry_residual, vars, vars_ε, vars_θ,var_names, var_elems),
+    AutoForwardDiff(), 
+    x
+)
+@show J
 
 #main(composite, vars, args_solve0, args_other)
 # @b main($(composite, vars, args_solve, args_other)...)
