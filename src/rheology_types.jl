@@ -49,6 +49,36 @@ DruckerPrager(args...) = DruckerPrager(promote(args...)...)
 # handle tuples
 @inline series_state_functions(r::NTuple{N, AbstractRheology}) where N = series_state_functions(first(r))..., series_state_functions(Base.tail(r))...
 
+# mark compressible rheologies
+iscompressible(::AbstractRheology) = false
+iscompressible(::Elasticity) = true
+
+# This appears to allocate in certain combinations on 1.10:
+function iscompressible(r::DruckerPrager{T}) where T
+    iscomp = false
+    if iszero(r.ψ)
+        iscomp =  true
+    end
+    return iscomp
+end
+function iscompressible(r::NTuple{N, AbstractRheology}) where N
+    iscomp = false
+    for i=1:N
+        #@show el
+        el::AbstractRheology = r[i]
+        if iscompressible(el)
+            iscomp = true
+            break
+        end
+    end
+    return iscomp
+end
+
+
+# mark shear rheologies
+isshear(::AbstractRheology) = true      # for now all are true
+isshear(r::NTuple{N, AbstractRheology}) where N = any(isshear.(r))
+
 # returns the flattened statefunctions along with NTuples with global & local element numbers
 function series_state_functions(r::NTuple{N, AbstractRheology}, num::MVector{N,Int}) where N 
     statefuns     = (series_state_functions(first(r))...,  series_state_functions(Base.tail(r))...)
