@@ -34,7 +34,6 @@ function eval_residual(x, composite_expanded, composite_global, state_funs, uniq
     eval_state_functions(state_funs, composite_expanded, args_tmp) - subtractor - subtractor_vars + subtractor_global
 end
 
-
 @generated function generate_subtractor_global(composite_global::NTuple{N3, AbstractRheology}, state_funs::NTuple{N1, Any}, unique_funs_global::NTuple{N2, Any}, args_solve) where {N1, N2, N3}
     quote
         @inline
@@ -72,20 +71,23 @@ end
     end
 end
 
-@inline getindex_tuple(x, inds::NTuple{N, Int}) where N = ntuple(i -> x[inds[i]], Val(N))
+@inline getindex_tuple(x, inds::NTuple{N, Int}) where N = ntuple(i -> @inbounds(x[inds[i]]), Val(N))
 
 function getindex_tuple(x, inds::NTuple{N, Int}) where N 
     ntuple(Val(N)) do i 
         @inline 
-        ind = inds[i]
-        iszero(ind) ? zero(eltype(x)) :  x[ind]
+        @inbounds ind = inds[i]
+        iszero(ind) ? zero(eltype(x)) : x[ind]
     end
 end
 
 @generated function generate_subtractor(x::SVector{N, T}, inds::NTuple{N, Int}) where {N,T}
     quote
         @inline 
-        Base.@nexprs $N i -> x_i = iszero(inds[i]) ? zero(T) : x[inds[i]]
+        Base.@nexprs $N i -> x_i = begin
+            ind = @inbounds inds[i]
+            iszero(ind) ? zero(T) : @inbounds(x[ind])
+        end
         Base.@ncall $N SVector x
     end 
 end
@@ -103,9 +105,9 @@ end
     quote
         @inline 
         Base.@ntuple $N i -> begin
-            ind = inds_args_to_x[i]
-            xᵢ = getindex_tuple(x, ind) 
-            _generate_args_from_x(xᵢ, args_template[i], args_all[i])
+            ind = @inbounds inds_args_to_x[i]
+            xᵢ  = getindex_tuple(x, ind) 
+            _generate_args_from_x(xᵢ, @inbounds(args_template[i]), @inbounds(args_all[i]))
         end
     end
 end
@@ -117,7 +119,7 @@ end
         Base.@ntuple $N1 i -> begin
             ind = 0
             Base.@nexprs $N2 j -> begin
-                check = unique_funs_local[j] === state_funs[i]
+                @inbounds check = unique_funs_local[j] === state_funs[i]
                 check && (ind = j)
             end
             ind
@@ -129,8 +131,9 @@ end
     quote
         @inline
         c = Base.@ntuple $N i -> begin
-            fns = series_state_functions(composite[i])
-            _expand_composite(composite[i], funs_local, fns)
+            compositeᵢ = @inbounds composite[i]
+            fns = series_state_functions(compositeᵢ)
+            _expand_composite(compositeᵢ, funs_local, fns)
         end
         Base.IteratorsMD.flatten(Base.IteratorsMD.flatten(c))
     end
@@ -158,8 +161,9 @@ end
     quote
         @inline
         c = Base.@ntuple $N i -> begin
-            fns = series_state_functions(composite[i])
-            _split_composite(composite[i], funs_global, fns)
+            compositeᵢ = composite[i]
+            fns = series_state_functions(compositeᵢ)
+            _split_composite(compositeᵢ, funs_global, fns)
         end
         Base.IteratorsMD.flatten(c)
     end
@@ -175,28 +179,28 @@ end
     end
 end
 
-for fn in (:compute_strain_rate, :compute_volumetric_strain_rate, :compute_lambda)
+for fn in (:compute_strain_rate, :compute_volumetric_strain_rate)
     @eval _local_series_state_functions(::typeof($fn)) = ()
 end
-_local_series_state_functions(fn::F) where F<:Function = (fn,)
+@inline _local_series_state_functions(fn::F) where F<:Function = (fn,)
 
 @generated function local_series_state_functions(funs::NTuple{N, Any}) where N
     quote
         @inline
-        f = Base.@ntuple $N i -> _local_series_state_functions(funs[i])
+        f = Base.@ntuple $N i -> _local_series_state_functions(@inbounds(funs[i]))
         Base.IteratorsMD.flatten(f)
     end
 end
 
-_global_series_state_functions(fn::typeof(compute_strain_rate)) = (fn, )
-_global_series_state_functions(fn::typeof(compute_volumetric_strain_rate)) = (fn, )
-_global_series_state_functions(fn::typeof(compute_lambda)) = (fn, )
-_global_series_state_functions(::F) where F<:Function = ()
+for fun in (:compute_strain_rate, :compute_volumetric_strain_rate)
+    @eval @inline _global_series_state_functions(fn::typeof($fun)) = (fn, )
+end
+@inline _global_series_state_functions(::F) where {F<:Function} = ()
 
 @generated function global_series_state_functions(funs::NTuple{N, Any}) where N
     quote
         @inline
-        f = Base.@ntuple $N i -> _global_series_state_functions(funs[i])
+        f = Base.@ntuple $N i -> _global_series_state_functions(@inbounds(funs[i]))
         Base.IteratorsMD.flatten(f)
     end
 end
@@ -213,14 +217,14 @@ end
 
 @inline generate_indices_from_args_to_x(::Tuple{}, ::Tuple{}, ::Val) = ()
 
-function generate_args_state_functions(reduction_ind::NTuple{N}, local_x, ::Val{N_reductions}) where {N, N_reductions}
+function generate_args_state_functions(reduction_ind::NTuple{N, Any}, local_x, ::Val{N_reductions}) where {N, N_reductions}
     ntuple(Val(N_reductions)) do i
         @inline
         if i ≤ N
             ntuple(Val(length(reduction_ind[i]))) do j
                 @inline
-                ind = reduction_ind[i][j]
-                local_x[ind]
+                @inbounds ind = reduction_ind[i][j]
+                @inbounds local_x[ind]
             end
         else
             (zero(eltype(local_x)),)
@@ -249,7 +253,7 @@ function main(composite, vars, args_solve0, args_other)
     args_local        = all_differentiable_kwargs(funs_local)
     vars_local        = ntuple(Val(length(args_local))) do i 
         k = keys(args_local[i])
-        v = (vars[first(k)],)
+        v = (first(k) ∈ keys(vars) ? vars[first(k)] : 0e0,)
         (; zip(k, v)...)
     end
     args_local_aug = ntuple(Val(length(args_local))) do i 
@@ -257,8 +261,8 @@ function main(composite, vars, args_solve0, args_other)
     end
 
     # N_reductions         = length(unique_funs_local)
-    # N_reductions         = length(unique_funs_global)
-    N_reductions         = length(vars)
+    N_reductions         = length(unique_funs_global)
+    # N_reductions         = length(vars)
     state_reductions     = ntuple(i -> state_var_reduction, Val(N_reductions))
     args_reduction       = ntuple(_ -> (), Val(N_reductions))
     state_funs           = merge_funs(state_reductions, funs_local)
@@ -280,7 +284,7 @@ function main(composite, vars, args_solve0, args_other)
     x        = SA[global_x..., local_x...]
 
     # this are the values from the local components that need to be sumed in the state functions, i.e. in compute_strain_rate / compute_volumetric_strain_rate
-    args_state_reductions = generate_args_state_functions(reduction_ind, local_x,  Val(N_reductions))
+    args_state_reductions = generate_args_state_functions(reduction_ind, local_x, Val(N_reductions))
     
     # 
     args_all      = tuple(args_state_reductions..., args_local_aug...)
@@ -288,15 +292,15 @@ function main(composite, vars, args_solve0, args_other)
     args_template = tuple(args_reduction..., args_local...)
 
     # need to expand the composite for the local equations
-    composite_expanded = expand_composite(composite, funs_local, Val(N_reductions))
-    composite_global,  = split_composite(composite, unique_funs_global, funs_local)
+    composite_expanded  = expand_composite(composite, funs_local, Val(N_reductions))
+    composite_global, a = split_composite(composite, unique_funs_global, funs_local)
 
     R, J = value_and_jacobian(        
         x -> eval_residual(x, composite_expanded, composite_global, state_funs, unique_funs_global, subtractor_vars, inds_x_to_subtractor, inds_args_to_x, args_template, args_all, args_solve, args_other),
         AutoForwardDiff(), 
         x
     )
-    J \ R
+    # J \ R
     J
 end
 
@@ -306,7 +310,7 @@ viscous1_s = LinearViscosityStress(5e19)
 powerlaw   = PowerLawViscosity(5e19, 3)
 drucker    = DruckerPrager(1e6, 10.0, 0.0)
 elastic    = Elasticity(1e10, 1e12) # im making up numbers
-case       = :case4
+case       = :case8
 
 composite, vars, args_solve0, args_other = if case === :case1 
     composite  = viscous1, powerlaw
@@ -356,7 +360,15 @@ elseif case === :case7
     args_solve = (; τ  = 1e2) # we solve for this, initial guess
     args_other = (; ) # other args that may be needed, non differentiable
     composite, vars, args_solve, args_other
+
+elseif case === :case8
+    composite  = viscous1, viscous2, drucker, drucker, elastic, powerlaw
+    vars       = (; ε  = 1e-15, θ = 1e-20) # input variables
+    args_solve = (; τ  = 1e2,   P = 1e6,) # we solve for this, initial guess
+    args_other = (; dt = 1e10) # other args that may be needed, non differentiable
+    composite, vars, args_solve, args_other
 end
 
 main(composite, vars, args_solve0, args_other)
-# @b main($(composite, vars, args_solve, args_other)...)
+@b main($(composite, vars, args_solve, args_other)...)
+# @code_warntype main(composite, vars, args_solve0, args_other)
