@@ -61,19 +61,26 @@ function iscompressible(r::DruckerPrager{T}) where T
     end
     return iscomp
 end
-function iscompressible(r::NTuple{N, AbstractRheology}) where N
-    iscomp = false
-    for i=1:N
-        #@show el
-        el::AbstractRheology = r[i]
-        if iscompressible(el)
-            iscomp = true
-            break
-        end
-    end
-    return iscomp
-end
+# function iscompressible(r::NTuple{N, AbstractRheology}) where N
+#     iscomp = false
+#     for i=1:N
+#         #@show el
+#         el::AbstractRheology = r[i]
+#         if iscompressible(el)
+#             iscomp = true
+#             break
+#         end
+#     end
+#     return iscomp
+# end
 
+@generated function iscompressible(r::NTuple{N, AbstractRheology}) where N
+    quote 
+        @inline 
+        Base.@nexprs $N i-> iscompressible(r[i]) && return true
+        return false
+    end
+end
 
 # mark shear rheologies
 isshear(::AbstractRheology) = true      # for now all are true
