@@ -121,8 +121,8 @@ function augment_args_local(args_local::NamedTuple, var_elems::NTuple{N,Int}, va
     return NamedTuple{k}(vals)
 end
 
-
-function statefuns_to_residual_series(funs_elements::NTuple{N, Any}, n=1) where N
+#=
+function statefuns_to_residual_series_old(funs_elements::NTuple{N, Any}, n=1) where N
     # this allocates - to be fixed!
     el_local = ()
     for statefuns in funs_elements
@@ -142,43 +142,82 @@ function statefuns_to_residual_series(funs_elements::NTuple{N, Any}, n=1) where 
 
     return el_local
 end
+=#
+
+function statefuns_to_residual_series(funs_elements::NTuple{N, Any}, n0 ) where N
+    n = Ref(n0)
+    el_local = ntuple(Val(N)) do j 
+        @inline 
+        statefuns = funs_elements[j]
+        ntuple(Val(length(statefuns))) do i 
+            @inline
+            if statefuns[i] === compute_strain_rate
+                1
+            elseif statefuns[i] === compute_volumetric_strain_rate
+                2    
+            else
+                n1 = n[]
+                n[]  += 1
+                n1
+            end
+        end
+    end
+    return el_local    
+end
+
+
+@generated function merge_namedtuples(args::NTuple{N, NamedTuple}, args_added::NamedTuple) where N
+    quote
+        @inline 
+        args_merged = Base.@ntuple $N i -> begin
+            merge(args[i], args_added)
+        end
+        args_merged
+    end
+end
 
 
 function main(composite, vars, args_solve0, args_other)
 
     # differentiable arguments for each of the rheological elements within the composite
-    funs_elements = series_state_functions.(composite)                      # state functions for each rheological element
+    funs_elements = series_state_functions(composite) 
+   
+    # state functions for each rheological element
     funs_unique   = get_unique_state_functions(composite, :series)          # unique state functions for the full serial element
     args_elements0= differentiable_kwargs.(funs_elements)                   # differentiable args for each element
     args_solve    = merge(differentiable_kwargs(funs_unique), args_solve0)  # differentiable args for the full serial element
 
-    # add solution arguments
-    args_elements    = ntuple(Val(length(args_elements0))) do i 
-        merge(args_elements0[i], args_solve0)
-    end
-
-    # augment 
-    args_elements_aug    = ntuple(Val(length(args_elements0))) do i 
-        merge(args_elements[i], args_other)
-    end
+    # add solution arguments to all arguments
+    args_elements = merge_namedtuples(args_elements0, args_solve0)
+    
+    # augment with additional variables
+    args_elements_aug = merge_namedtuples(args_elements0, args_other)
 
     # determine if we iterate for τ, for P or for both. 
-    iteration_vars = (;)
-    if isshear(composite)
-        if haskey(args_solve,:τ)
-            iteration_vars = merge(iteration_vars,(τ=args_solve.τ,))
+    iteration_vars0 = (;)
+    iteration_vars1 = if isshear(composite)
+        _to_merge = if haskey(args_solve,:τ)
+            (τ=args_solve.τ,)
         else
-            iteration_vars = merge(iteration_vars,(τ=0,))
+            (τ=0e0, )
         end
+        merge(iteration_vars0, _to_merge)
+    else
+        iteration_vars0
     end
-    if iscompressible(composite)
-        if haskey(args_solve,:P)
-            iteration_vars = merge(iteration_vars,(P=args_solve.P,))
+     
+    iteration_vars = if iscompressible(composite)
+        _to_merge = if haskey(args_solve,:P)
+            (P=args_solve.P,)
         else
-            iteration_vars = merge(iteration_vars,(P=0,))
+            (P=0e0, )
         end
+        merge(iteration_vars1, _to_merge)
+    else
+        iteration_vars1
     end
 
+   
     # Get the entry in the residual vector for every state function
     entry_residual = statefuns_to_residual_series(funs_elements, length(iteration_vars)+1)  # allocates - to be fixed
 
@@ -188,6 +227,7 @@ function main(composite, vars, args_solve0, args_other)
         Base.structdiff(args_elements[i], iteration_vars)
     end
 
+
     # additional variables for each rheological element (that are not τ or P)
     el_local = ntuple(Val(length(args_local))) do i 
         ntuple(j -> i, Val(length(args_local[i]))) 
@@ -195,11 +235,7 @@ function main(composite, vars, args_solve0, args_other)
 
     # lets number each of these additional variables so we know 
     Nsol = length(iteration_vars)
-    #num_vars = ntuple(Val(length(args_local))) do i 
-    #    ntuple(j -> n+j, k=j, Val(length(args_local[i]))) 
-    #   #Nsol += length(args_local[i])
-    #end
-
+   
     # flatten the additional variables (besides τ and P) for each rheological element
     # the trick here is that we may have several variables with the same name, so we cannot have a single NamedTuple for this
     # we also don't need that as we simply need to know which variable belongs to which rheological element
@@ -215,18 +251,23 @@ function main(composite, vars, args_solve0, args_other)
     # extract variables that have :ε or :θ in the name (need to be summed separately in residual function)
     vars_ε      =   var_names .== :ε
     vars_θ      =   var_names .== :θ
-
-    
+  
     # Initial values for each of the variables
-    x           = SA[ Base.IteratorsMD.flatten(values(iteration_vars))..., Base.IteratorsMD.flatten(values.(args_local))...]
+    x           = SA[Base.IteratorsMD.flatten(values(iteration_vars))..., Base.IteratorsMD.flatten(values.(args_local))...]
 
-    # We now know the correct variable names and index numbers for each of the variables
-   # @show var_names var_elems funs_elements entry_residual x
+    # We now know the correct variable names and index numbers for each of the variables:
+    # @show var_names var_elems funs_elements entry_residual x
 
     # Compute the residual vector
-    #res = eval_residual(x, composite, args_elements, funs_elements, entry_residual, vars, vars_ε, vars_θ, var_names, var_elems)
+    res = eval_residual(x, composite, args_elements, funs_elements, entry_residual, vars, vars_ε, vars_θ, var_names, var_elems)
 
-    return  var_names, var_elems, funs_elements, entry_residual, x, args_elements_aug, vars_ε, vars_θ
+    # jacobian and residual vector:
+    R, J = value_and_jacobian(        
+        x -> eval_residual(x, composite, args_elements, funs_elements, entry_residual, vars, vars_ε, vars_θ, var_names, var_elems),
+        AutoForwardDiff(), 
+        x
+    )
+    return J, R, x, var_names, var_elems
 end
 
 
@@ -238,7 +279,7 @@ viscous2_s = LinearViscosityStress(1e20)
 powerlaw   = PowerLawViscosity(5e19, 3)
 drucker    = DruckerPrager(1e6, 10.0, 0.0)
 elastic    = Elasticity(1e10, 1e12) # im making up numbers
-case       = :case1
+case       = :case6
 
 composite, vars, args_solve0, args_other = if case === :case1 
     composite  = viscous1, powerlaw
@@ -300,27 +341,25 @@ elseif case === :case8
     composite, vars, args_solve, args_other
 end
 
+@btime main($(composite, vars, args_solve, args_other)...)
 
-#@btime main($(composite, vars, args_solve, args_other)...)
-var_names, var_elems, funs_elements, entry_residual, x, args_elements, vars_ε, vars_θ = main((composite, vars, args_solve, args_other)...)
-
-
-
+# #@btime main($(composite, vars, args_solve, args_other)...)
+# J, R, x, var_names, var_elems= main((composite, vars, args_solve, args_other)...)
 
 
-@btime eval_residual($x, $composite, $args_elements, $funs_elements, $entry_residual, $vars, $vars_ε, $vars_θ, $var_names, $var_elems)
+# @btime eval_residual($x, $composite, $args_elements, $funs_elements, $entry_residual, $vars, $vars_ε, $vars_θ, $var_names, $var_elems)
 
 
-#eval_residual(x, composite, args_elements, funs_elements, entry_residual, vars, vars_ε, vars_θ, var_names, var_elems)
+# #eval_residual(x, composite, args_elements, funs_elements, entry_residual, vars, vars_ε, vars_θ, var_names, var_elems)
 
-R, J = value_and_jacobian(        
-    x -> eval_residual(x, composite, args_elements, funs_elements, entry_residual, vars, vars_ε, vars_θ, var_names, var_elems),
-    AutoForwardDiff(), 
-    x
-)
-@show J
+# R, J = value_and_jacobian(        
+#     x -> eval_residual(x, composite, args_elements, funs_elements, entry_residual, vars, vars_ε, vars_θ, var_names, var_elems),
+#     AutoForwardDiff(), 
+#     x
+# )
+# @show J
 
-#main(composite, vars, args_solve0, args_other)
-# @b main($(composite, vars, args_solve, args_other)...)
+# #main(composite, vars, args_solve0, args_other)
+# # @b main($(composite, vars, args_solve, args_other)...)
 
 

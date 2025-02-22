@@ -54,6 +54,9 @@ iscompressible(::AbstractRheology) = false
 iscompressible(::Elasticity) = true
 
 # This appears to allocate in certain combinations on 1.10:
+iscompressible(::DruckerPrager{T}) where T = true
+
+#=
 function iscompressible(r::DruckerPrager{T}) where T
     iscomp = false
     if iszero(r.ψ)
@@ -61,6 +64,7 @@ function iscompressible(r::DruckerPrager{T}) where T
     end
     return iscomp
 end
+=#
 # function iscompressible(r::NTuple{N, AbstractRheology}) where N
 #     iscomp = false
 #     for i=1:N
@@ -84,7 +88,16 @@ end
 
 # mark shear rheologies
 isshear(::AbstractRheology) = true      # for now all are true
-isshear(r::NTuple{N, AbstractRheology}) where N = any(isshear.(r))
+#isshear(r::NTuple{N, AbstractRheology}) where N = any(isshear.(r))     # allocates sometimes
+
+@generated function isshear(r::NTuple{N, AbstractRheology}) where N
+    quote 
+        @inline 
+        Base.@nexprs $N i-> isshear(r[i]) && return true
+        return false
+    end
+end
+
 
 # returns the flattened statefunctions along with NTuples with global & local element numbers
 function series_state_functions(r::NTuple{N, AbstractRheology}, num::MVector{N,Int}) where N 
@@ -95,6 +108,16 @@ function series_state_functions(r::NTuple{N, AbstractRheology}, num::MVector{N,I
 
     return statefuns, statenum, stateelements
 end
+
+# does not allocate:
+function series_state_functions(composite::NTuple{N, AbstractRheology}) where N
+    statefuns = ntuple(Val(N)) do j 
+        @inline 
+        series_state_functions(composite[j])
+    end
+    return statefuns    
+end
+
 
 # Global number
 function val(i::Int64,len::NTuple{N,Int},num::MVector{N,Int}) where N
@@ -133,7 +156,15 @@ end
 
 
 # handle tuples
-@inline parallel_state_functions(r::NTuple{N, AbstractRheology}) where N = parallel_state_functions(first(r))..., parallel_state_functions(Base.tail(r))...
+#@inline parallel_state_functions(r::NTuple{N, AbstractRheology}) where N = parallel_state_functions(first(r))..., parallel_state_functions(Base.tail(r))...
+function parallel_state_functions(composite::NTuple{N, AbstractRheology}) where N
+    statefuns = ntuple(Val(N)) do j 
+        @inline 
+        parallel_state_functions(composite[j])
+    end
+    return statefuns    
+end
+
 @inline parallel_state_functions(::Tuple{})= ()
 
 function parallel_state_functions(r::NTuple{N, AbstractRheology}, num::MVector{N,Int}) where N 
