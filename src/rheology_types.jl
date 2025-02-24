@@ -110,13 +110,16 @@ function series_state_functions(r::NTuple{N, AbstractRheology}, num::MVector{N,I
 end
 
 # does not allocate:
-function series_state_functions(composite::NTuple{N, AbstractRheology}) where N
-    statefuns = ntuple(Val(N)) do j 
-        @inline 
-        series_state_functions(composite[j])
-    end
-    return statefuns    
-end
+@inline series_state_functions(r::NTuple{N, AbstractRheology}) where N = series_state_functions(first(r))..., series_state_functions(Base.tail(r))...
+@inline series_state_functions(::Tuple{})= ()
+
+# function series_state_functions(composite::NTuple{N, AbstractRheology}) where N
+#     statefuns = ntuple(Val(N)) do i
+#         @inline 
+#         series_state_functions(composite[i])
+#     end
+#     return statefuns    
+# end
 
 
 # Global number
@@ -143,7 +146,7 @@ function val_element(i::Int64,len::NTuple{N,Int}) where N
     return v
 end
 
-@inline series_state_functions(::Tuple{})= ()
+
 
 ## METHODS FOR PARALLEL MODELS
 # table of methods needed per rheology
@@ -156,16 +159,16 @@ end
 
 
 # handle tuples
-#@inline parallel_state_functions(r::NTuple{N, AbstractRheology}) where N = parallel_state_functions(first(r))..., parallel_state_functions(Base.tail(r))...
-function parallel_state_functions(composite::NTuple{N, AbstractRheology}) where N
-    statefuns = ntuple(Val(N)) do j 
-        @inline 
-        parallel_state_functions(composite[j])
-    end
-    return statefuns    
-end
-
+@inline parallel_state_functions(r::NTuple{N, AbstractRheology}) where N = parallel_state_functions(first(r))..., parallel_state_functions(Base.tail(r))...
 @inline parallel_state_functions(::Tuple{})= ()
+# function parallel_state_functions(composite::NTuple{N, AbstractRheology}) where N
+#     statefuns = ntuple(Val(N)) do j 
+#         @inline 
+#         parallel_state_functions(composite[j])
+#     end
+#     return statefuns    
+# end
+
 
 function parallel_state_functions(r::NTuple{N, AbstractRheology}, num::MVector{N,Int}) where N 
     statefuns = (parallel_state_functions(first(r))...,  parallel_state_functions(Base.tail(r))...)
