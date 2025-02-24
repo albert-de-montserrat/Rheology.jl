@@ -127,34 +127,113 @@ end
     end
 end
 
-@generated function expand_composite(composite::NTuple{N, AbstractRheology}, funs_local) where N
+# @b expand_composite2($composite, $funs_local)
+
+# @generated function expand_composite2(composite::NTuple{N, AbstractRheology}, funs_local::NTuple{NF, Any}) where {N, NF}
+#     quote
+#         @inline
+#         c = Base.@ntuple $N i -> begin
+#             # compositeᵢ = composite[i]
+#             # fns = 
+#             _expand_composite(composite[i], funs_local, series_state_functions(composite[i]))
+#         end
+#         # Base.IteratorsMD.flatten(Base.IteratorsMD.flatten(c))
+#         # Base.IteratorsMD.flatten(c)
+#     end
+# end
+
+# @b expand_composite2($composite, $funs_local)
+# @code_warntype expand_composite2(composite, funs_local)
+# expand_composite(composite, funs_local)
+# compositeᵢ = @inbounds composite[1]
+# @code_warntype series_state_functions(compositeᵢ)
+
+
+# @generated function _expand_composite(compositeᵢ, funs_local, fns::NTuple{N, Any}) where N
+#     quote
+#         @inline
+#         Base.@ntuple $N i -> begin
+#             fns[i] ∈ funs_local ? ((compositeᵢ),) : ()
+#         end
+#     end
+# end
+
+# @noinline function _expand_composite(compositeᵢ, funs_local::NTuple{N1, Any}, fns::NTuple{N2, Any}) where {N1,N2}
+#     c = ntuple(Val(N2)) do i
+#         @inline
+#         ntuple(Val(N1)) do j
+#             @inline
+#             _expand_composite(fns[i], funs_local[j], compositeᵢ)
+#         end
+#     end
+#     Base.IteratorsMD.flatten(Base.IteratorsMD.flatten(c))
+# end
+
+# _expand_composite(::F, ::F, compositeᵢ)   where F        = ((compositeᵢ),)
+# _expand_composite(::F1, ::F2, compositeᵢ) where {F1, F2} = ()
+
+# @generated function expand_composite(composite::NTuple{N, AbstractRheology}, funs_local::NTuple{NF, Any}) where {N, NF}
+#     quote
+#         @inline
+#         c = Base.@ntuple $N i ->  begin
+#             _expand_composite(composite[i], funs_local, series_state_functions(composite[i]))
+#         end
+#         # Base.IteratorsMD.flatten(Base.IteratorsMD.flatten(c))
+#         Base.IteratorsMD.flatten(c)
+#     end
+# end
+
+
+@generated function expand_composite(composite::NTuple{N, AbstractRheology}, funs_local::NTuple{NF, Any}) where {N, NF}
     quote
         @inline
-        c = Base.@ntuple $N i -> begin
-            compositeᵢ = @inbounds composite[i]
-            fns = series_state_functions(compositeᵢ)
-            _expand_composite(compositeᵢ, funs_local, fns)
+        c = Base.@ntuple $N i ->  begin
+            _expand_composite(composite[i], funs_local, series_state_functions(composite[i]))
         end
         Base.IteratorsMD.flatten(Base.IteratorsMD.flatten(c))
+        # Base.IteratorsMD.flatten(c)
     end
 end
 
-@generated function _expand_composite(compositeᵢ, funs_local, fns::NTuple{N, Any}) where N
+_expand_composite(compositeᵢ, ::Val{true})          = ((compositeᵢ),)
+_expand_composite(::AbstractRheology, ::Val{false}) = ()
+
+@generated function _expand_composite(compositeᵢ, funs_local::NTuple{N1, Any}, fns::NTuple{N2, Any}) where {N1,N2}
     quote
         @inline
-        Base.@ntuple $N i -> begin
-            fns[i] ∈ funs_local ? ((compositeᵢ),) : ()
+        Base.@ntuple $N2 i -> begin
+            _expand_composite(compositeᵢ, isin_functions(fns[i], funs_local))
         end
     end
 end
+
+function isin_functions(fn::F,  fns::NTuple{N, Any}) where {F<:Function, N} 
+    compare(fn, first(fns), Base.tail(fns), Val(false))
+end
+
+@inline _compare(::F1,  ::F2, ::Val{B}) where {F1, F2, B} = compare(Val(false), Val(B))
+@inline _compare(::F,  ::F, ::Val{B})   where {F, B}      = compare(Val(true), Val(B))
+
+@inline compare(::Val{false}, ::Val{false}) = Val(false)
+@inline compare(::Val, ::Val) = Val(true)
+
+@inline compare(fn::F1, fns₁::F2, fns::NTuple{N, Any}, ::Val{B}) where {F1, F2, N, B} = compare(fn, first(fns), Base.tail(fns), _compare(fn, fns₁, Val(B)))
+@inline compare(fn::F1, fns₁::F2, ::Tuple{}, ::Val{B}) where {F1, F2, B} = _compare(fn, fns₁, Val(B))
 
 @inline function expand_composite(composite::NTuple{N, AbstractRheology}, funs_local, ::Val{N_reductions}) where {N, N_reductions}
     (ntuple(_-> first(composite), Val(N_reductions))..., expand_composite(composite, funs_local)...)
 end
 
+@inline function expand_composite(composite::NTuple{N, AbstractRheology}, ::Tuple{}, ::Val{N_reductions}) where {N, N_reductions}
+    ntuple(_-> first(composite), Val(N_reductions))
+end
 
 @inline function split_composite(composite::NTuple{N, AbstractRheology}, unique_funs_global, funs_local) where {N}
     (split_composite(composite, unique_funs_global), expand_composite(composite, funs_local))
+end
+
+@inline function split_composite(composite::NTuple{N, AbstractRheology}, unique_funs_global, ::Tuple{}) where {N}
+    (split_composite(composite, unique_funs_global), ())
 end
 
 @generated function split_composite(composite::NTuple{N, AbstractRheology}, funs_global) where N
@@ -234,7 +313,7 @@ end
  
 @inline generate_args_state_functions(::Tuple{}, ::Any, ::Val) = ()
 
-@inline differentiable_kwargs(::Type{T}, ::typeof(state_var_reduction))                    where T = (; )
+@inline differentiable_kwargs(::Type{T}, ::typeof(state_var_reduction)) where T = (; )
 
 function main(composite, vars, args_solve0, args_other)
 
@@ -261,8 +340,8 @@ function main(composite, vars, args_solve0, args_other)
     end
 
     # N_reductions         = length(unique_funs_local)
-    N_reductions         = length(unique_funs_global)
-    # N_reductions         = length(vars)
+    # N_reductions         = length(unique_funs_global)
+    N_reductions         = length(args_solve)
     state_reductions     = ntuple(i -> state_var_reduction, Val(N_reductions))
     args_reduction       = ntuple(_ -> (), Val(N_reductions))
     state_funs           = merge_funs(state_reductions, funs_local)
@@ -271,8 +350,8 @@ function main(composite, vars, args_solve0, args_other)
     reduction_ind        = reduction_funs_args_indices(funs_local, unique_funs_local)
 
     N                    = length(state_funs)
-    N_reductions0        = min(N_reductions, length(vars))  # to be checked
-    subtractor_vars      = SVector{N}(i ≤ N_reductions0 ? values(vars)[i] : 0e0 for i in 1:N)
+    # N_reductions0        = min(N_reductions, length(vars))  # to be checked
+    subtractor_vars      = SVector{N}(i ≤ N_reductions ? values(vars)[i] : 0e0 for i in 1:N)
 
     inds_args_to_x       = generate_indices_from_args_to_x(funs_local, reduction_ind, Val(N_reductions))
 
@@ -293,7 +372,7 @@ function main(composite, vars, args_solve0, args_other)
 
     # need to expand the composite for the local equations
     composite_expanded  = expand_composite(composite, funs_local, Val(N_reductions))
-    composite_global, a = split_composite(composite, unique_funs_global, funs_local)
+    composite_global,   = split_composite(composite, unique_funs_global, funs_local)
 
     R, J = value_and_jacobian(        
         x -> eval_residual(x, composite_expanded, composite_global, state_funs, unique_funs_global, subtractor_vars, inds_x_to_subtractor, inds_args_to_x, args_template, args_all, args_solve, args_other),
@@ -310,65 +389,136 @@ viscous1_s = LinearViscosityStress(5e19)
 powerlaw   = PowerLawViscosity(5e19, 3)
 drucker    = DruckerPrager(1e6, 10.0, 0.0)
 elastic    = Elasticity(1e10, 1e12) # im making up numbers
-case       = :case8
+case       = :case1
 
-composite, vars, args_solve0, args_other = if case === :case1 
+composite, vars, args_solve0, args_other, J_true = if case === :case1 
     composite  = viscous1, powerlaw
-    vars       = (; ε  = 1e-15) # input variables
-    args_solve = (; τ  = 1e2  ) # we solve for this, initial guess
+    ε          = 1e-15 
+    τ          = 1e2
+    vars       = (; ε = ε) # input variables
+    args_solve = (; τ = τ) # we solve for this, initial guess
     args_other = (;) # other args that may be needed, non differentiable
-    composite, vars, args_solve, args_other
+    # analytical Jacobian
+    J11        = 1/2/viscous1.η  
+    J22        = (2 * powerlaw.η) ^(1/powerlaw.n) * ε^(1/powerlaw.n-1) / powerlaw.n
+    J = SA[
+        J11     1.0
+        -1.0    J22
+    ]
+    composite, vars, args_solve, args_other, J
 
 elseif case === :case2
     composite  = viscous1, elastic
     vars       = (; ε  = 1e-15, θ = 1e-20) # input variables
     args_solve = (; τ  = 1e2,   P = 1e6  ) # we solve for this, initial guess
     args_other = (; dt = 1e10) # other args that may be needed, non differentiable
-    composite, vars, args_solve, args_other
+    # analytical Jacobian
+    J11        = 1/2/viscous1.η + 1/2/elastic.G/args_other.dt  
+    J22        = 1 / elastic.K /args_other.dt  
+    J = SA[
+        J11    0.0
+        0.0    J22
+    ]
+    composite, vars, args_solve, args_other, J
 
 elseif case === :case3
     composite  = viscous1, elastic, powerlaw
     vars       = (; ε  = 1e-15, θ = 1e-20) # input variables
     args_solve = (; τ  = 1e2,   P = 1e6  ) # we solve for this, initial guess
     args_other = (; dt = 1e10) # other args that may be needed, non differentiable
-    composite, vars, args_solve, args_other
+    # analytical Jacobian
+    J11        = 1/2/viscous1.η + 1/2/elastic.G/args_other.dt  
+    J22        = 1 / elastic.K /args_other.dt  
+    J33        = (2 * powerlaw.η) ^(1/powerlaw.n) * ε^(1/powerlaw.n-1) / powerlaw.n
+    J = SA[
+        J11  0.0  1.0
+        0.0  J22  0.0
+       -1.0  0.0  J33
+    ]
+
+    composite, vars, args_solve, args_other, J
 
 elseif case === :case4
     composite  = viscous1, drucker
     vars       = (; ε  = 1e-15, θ = 1e-20) # input variables
     args_solve = (; τ  = 1e2, ) # we solve for this, initial guess
     args_other = (; dt = 1e10) # other args that may be needed, non differentiable
-    composite, vars, args_solve, args_other
+    # analytical Jacobian
+    J11        = 1/2/viscous1.η
+    J = SA[
+        J11    1.0
+       -1.0   -1.0
+    ]
+    composite, vars, args_solve, args_other, J
 
 elseif case === :case5
     composite  = viscous1, elastic, powerlaw, drucker
     vars       = (; ε  = 1e-15, θ = 1e-20) # input variables
     args_solve = (; τ  = 1e2,   P = 1e6,) # we solve for this, initial guess
     args_other = (; dt = 1e10) # other args that may be needed, non differentiable
-    composite, vars, args_solve, args_other
+    # analytical Jacobian
+    J11        = 1/2/viscous1.η 
+    J22        = 1 / elastic.K /args_other.dt  
+    J33        = (2 * powerlaw.η) ^(1/powerlaw.n) * ε^(1/powerlaw.n-1) / powerlaw.n
+    J = SA[
+        J11       0.0       1.0      0.0
+        0.0       J22       0.0      1.0
+       -1.0       0.0       J33      0.0
+       -0.0      -1.0      -0.0     -1.0
+    ]
+    composite, vars, args_solve, args_other, J
 
 elseif case === :case6
     composite  = powerlaw, powerlaw
     vars       = (; ε  = 1e-15) # input variables
     args_solve = (; τ  = 1e2) # we solve for this, initial guess
-    args_other = (; dt = 1e10) # other args that may be needed, non differentiable
-    composite, vars, args_solve, args_other
+    args_other = (; ) # other args that may be needed, non differentiable
+    # analytical Jacobian
+    # J11        = 1/2/viscous1.η  
+    J22 = J33  = (2 * powerlaw.η) ^(1/powerlaw.n) * ε^(1/powerlaw.n-1) / powerlaw.n
+    J = SA[
+        0.0  1.0  1.0
+       -1.0  J22  0.0
+       -1.0  0.0  J33
+    ]
+    composite, vars, args_solve, args_other, J
 
 elseif case === :case7
     composite  = viscous1, viscous2
     vars       = (; ε  = 1e-15) # input variables
     args_solve = (; τ  = 1e2) # we solve for this, initial guess
     args_other = (; ) # other args that may be needed, non differentiable
-    composite, vars, args_solve, args_other
+    # analytical Jacobian
+    J11        = 1/2/viscous1.η + 1/2/viscous2.η
+    J = @SMatrix [
+        J11
+    ]
+    composite, vars, args_solve, args_other, J
 
 elseif case === :case8
     composite  = viscous1, viscous2, drucker, drucker, elastic, powerlaw
     vars       = (; ε  = 1e-15, θ = 1e-20) # input variables
     args_solve = (; τ  = 1e2,   P = 1e6,) # we solve for this, initial guess
     args_other = (; dt = 1e10) # other args that may be needed, non differentiable
-    composite, vars, args_solve, args_other
+
+    # analytical Jacobian
+    J11        = 1/2/viscous1.η + 1/2/viscous2.η + 1/2/elastic.G/args_other.dt  
+    J22        = 1 / elastic.K /args_other.dt  
+    J55        = (2 * powerlaw.η) ^(1/powerlaw.n) * ε^(1/powerlaw.n-1) / powerlaw.n
+    J = SA[
+        J11       0.0       1.0   1.0   0.0
+        0.0       J22       0.0   0.0   1.0
+       -1.0      -0.0      -1.0  -0.0  -0.0
+       -1.0      -0.0      -0.0  -1.0  -0.0
+        0.0      -1.0       0.0   0.0   J55
+    ]
+    composite, vars, args_solve, args_other, J
 end
 
-main(composite, vars, args_solve0, args_other)
-@b main($(composite, vars, args_solve, args_other)...)
+J = main(composite, vars, args_solve0, args_other) 
+@show J ≈ J_true
+J
+
+# @b main($(composite, vars, args_solve, args_other)...)
 # @code_warntype main(composite, vars, args_solve0, args_other)
+
