@@ -387,10 +387,10 @@ $
 $
 where the parallel elements are defined by  
 $
-  tau^("parallel1") = tau^("viscous3") + tau^("elasticity1") 
+  tau^("parallel1") = tau^("viscous3") + tau^("elasticity1") + tau^("plastic1")
 $
 $
-  tau^("parallel2") = tau^("viscous4") + tau^("elasticity2") + tau^("plastic1")
+  tau^("parallel2") = tau^("viscous4") + tau^("elasticity2") 
 $
 It is useful to break this problem apart in 3 sub-problems: one serial and 2 parallel ones. For simplicity lets only consider shear elasticity.
 
@@ -412,35 +412,34 @@ $
 
 The *parallel1* element gives:
 $ x = mat(
-  epsilon^("parallel1");
-) 
-$
-$ r = mat(
-  -tau^("parallel1") + 2 eta_3 epsilon^("parallel1") + ( 2 G_1 Delta t epsilon^("parallel1") + tau^o_1);
-) 
-$
-
-and the *parallel2* element gives:
-$ x = mat(
   epsilon^("parallel2"); 
   tau^("plastic1");
   lambda
 ) 
 $
 $ r = mat(
-  -tau^("parallel2") + 2 eta_4 epsilon^("parallel2") + ( 2 G_2 Delta t epsilon^("parallel2") + tau^o_1) +  tau^("plastic1");
-  - epsilon^("parallel2")  + lambda ( partial Q )/ ( partial tau^("plastic1") );
+  -tau^("parallel1") + 2 eta_3 epsilon^("parallel1") + ( 2 G_1 Delta t epsilon^("parallel1") + tau^o_1) +  tau^("plastic1");
+  - epsilon^("parallel1")  + lambda ( partial Q )/ ( partial tau^("plastic1") );
   -lambda + F(tau^("plastic1"))
 ) 
 $
+and the *parallel2* element gives:
+$ x = mat(
+  epsilon^("parallel2");
+) 
+$
+$ r = mat(
+  -tau^("parallel2") + 2 eta_4 epsilon^("parallel2") + ( 2 G_2 Delta t epsilon^("parallel2") + tau^o_2);
+) 
+$
 
-The overall solution vector will thus be:
+One way to arrange the overall solution vector is:
 $ x = mat(
   tau;
   epsilon^("parallel1");
-  epsilon^("parallel2"); 
   tau^("plastic1");
-  lambda
+  lambda;
+  epsilon^("parallel2"); 
 ) 
 $
 
@@ -448,24 +447,25 @@ We can reconstruct the overal residual vector recursively, by placing the residu
 $ r = mat(
   -epsilon +  tau/(2 eta_1) +epsilon^("parallel1")+epsilon^("parallel2") + tau/(2 eta_2);
   -tau ;
+  0;
+  0;
   -tau ;
-  0;
+) 
+&+ \
+mat(
+ 0;
+  2 eta_3 epsilon^("parallel1") + ( 2 G_1 Delta t epsilon^("parallel1") + tau^o_1) +  tau^("plastic1");
+  - epsilon^("parallel1")  + lambda ( partial Q )/ ( partial tau^("plastic1") );
+  -lambda + F(tau^("plastic1"));
   0
 ) 
 &+ \
 mat(
  0;
-  2 eta_3 epsilon^("parallel1") + ( 2 G_1 Delta t epsilon^("parallel1") + tau^o_1);
   0 ;
   0 ;
-  0
-) 
-&+ \
-mat(
- 0;
-  0;
-  2 eta_4 epsilon^("parallel2") + ( 2 G_2 Delta t epsilon^("parallel2") + tau^o_1) +  tau^("plastic1");
-  - epsilon^("parallel2")  + lambda ( partial Q )/ ( partial tau^("plastic1") );
-  -lambda + F(tau^("plastic1"))
+  0; 
+  2 eta_4 epsilon^("parallel2") + ( 2 G_2 Delta t epsilon^("parallel2") + tau^o_2);
 ) 
 $
+Note that we could also have arranged the solution vector in a different manner. I'm not sure how we will get around numbering in one way opr the other, though.
