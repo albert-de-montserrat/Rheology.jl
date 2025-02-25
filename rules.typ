@@ -374,3 +374,98 @@ $
 === What do we need to generate this code?
 Same as in the series case:
   + Get all the unique state functions and variables for the parallel case
+
+
+
+= Serial and parallel elements
+== Example 4.1: case with 2 parallel elements in series
+
+Components: linear viscous + parallel1 + parallel2 + linear viscous2
+
+$
+  dot(epsilon) = dot(epsilon)^("viscous1") + dot(epsilon)^("parallel1") + dot(epsilon)^("parallel2") + dot(epsilon)^("viscous2")
+$
+where the parallel elements are defined by  
+$
+  tau^("parallel1") = tau^("viscous3") + tau^("elasticity1") 
+$
+$
+  tau^("parallel2") = tau^("viscous4") + tau^("elasticity2") + tau^("plastic1")
+$
+It is useful to break this problem apart in 3 sub-problems: one serial and 2 parallel ones. For simplicity lets only consider shear elasticity.
+
+The serial problem can be broken apart as a viscous element, followed by elements where we can have strainrate as a function of stress, but not vice-versa.
+
+So the *serial* element gives:
+$ x = mat(
+  tau;
+  epsilon^("parallel1");
+  epsilon^("parallel2"); 
+) 
+$
+$ r = mat(
+  -epsilon +  tau/(2 eta_1) +epsilon^("parallel1")+epsilon^("parallel2") + tau/(2 eta_2);
+  -tau + tau^("parallel1");
+  -tau + tau^("parallel2");
+) 
+$
+
+The *parallel1* element gives:
+$ x = mat(
+  epsilon^("parallel1");
+) 
+$
+$ r = mat(
+  -tau^("parallel1") + 2 eta_3 epsilon^("parallel1") + ( 2 G_1 Delta t epsilon^("parallel1") + tau^o_1);
+) 
+$
+
+and the *parallel2* element gives:
+$ x = mat(
+  epsilon^("parallel2"); 
+  tau^("plastic1");
+  lambda
+) 
+$
+$ r = mat(
+  -tau^("parallel2") + 2 eta_4 epsilon^("parallel2") + ( 2 G_2 Delta t epsilon^("parallel2") + tau^o_1) +  tau^("plastic1");
+  - epsilon^("parallel2")  + lambda ( partial Q )/ ( partial tau^("plastic1") );
+  -lambda + F(tau^("plastic1"))
+) 
+$
+
+The overall solution vector will thus be:
+$ x = mat(
+  tau;
+  epsilon^("parallel1");
+  epsilon^("parallel2"); 
+  tau^("plastic1");
+  lambda
+) 
+$
+
+We can reconstruct the overal residual vector recursively, by placing the residual components of each element at the correct location: 
+$ r = mat(
+  -epsilon +  tau/(2 eta_1) +epsilon^("parallel1")+epsilon^("parallel2") + tau/(2 eta_2);
+  -tau ;
+  -tau ;
+  0;
+  0
+) 
+&+ \
+mat(
+ 0;
+  2 eta_3 epsilon^("parallel1") + ( 2 G_1 Delta t epsilon^("parallel1") + tau^o_1);
+  0 ;
+  0 ;
+  0
+) 
+&+ \
+mat(
+ 0;
+  0;
+  2 eta_4 epsilon^("parallel2") + ( 2 G_2 Delta t epsilon^("parallel2") + tau^o_1) +  tau^("plastic1");
+  - epsilon^("parallel2")  + lambda ( partial Q )/ ( partial tau^("plastic1") );
+  -lambda + F(tau^("plastic1"))
+) 
+$
