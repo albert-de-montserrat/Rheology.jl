@@ -152,74 +152,6 @@ args_other = (; ) # other args that may be needed, non differentiable
 # # DEAL FIRST WITH THE SERIES PART
 # #######################################################################
 
-# struct Composite{T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11}
-#     composite::T1               # initial definition of the composite
-#     composite_expanded::T2      # composite for every row of the Jacobian (i.e. the local composite for the local equations)
-#     composite_global::T3        # composite for every row of the Jacobian where the global equations are solved
-#     state_funs::T4              # state functions
-#     unique_funs_global::T5      # unique functions for the global equations
-#     subtractor_vars::T6         # constant values that need to be subtracted from the state functions (i.e. input variables)
-#     inds_x_to_subtractor::T7    # mapping from the state functions to the subtractor
-#     inds_args_to_x::T8          # mapping from the local functions to the respective reduction of the state functions
-#     reduction_ind::T9           # indices that map the local functions to the respective reduction of the state functions
-#     args_template::T10          # template for args to do pattern matching later
-#     N_reductions::T11           # number of reductions (i.e. variables we solve for)
-# end
-
-# function Composite(c::SeriesModel, vars, args_solve0)
-#     composite          = c.leafs   
-#     funs_all           = series_state_functions(composite)
-#     funs_global        = global_series_state_functions(funs_all)
-#     # args_solve         = merge(differentiable_kwargs(funs_global), args_solve0)
-#     args_solve         = differentiable_kwargs(funs_global)
-#     unique_funs_global = flatten_repeated_functions(funs_global)
-    
-#     funs_local         = local_series_state_functions(funs_all)
-#     unique_funs_local  = flatten_repeated_functions(funs_local)
-#     args_local         = all_differentiable_kwargs(funs_local)
-
-#     # N_reductions         = length(unique_funs_local)
-#     # N_reductions         = length(unique_funs_global)
-#     N_reductions         = length(args_solve)
-#     state_reductions     = ntuple(i -> state_var_reduction, Val(N_reductions))
-#     args_reduction       = ntuple(_ -> (), Val(N_reductions))
-#     state_funs           = merge_funs(state_reductions, funs_local)
-
-#     # indices that map the local functions to the respective reduction of the state functions
-#     reduction_ind        = reduction_funs_args_indices(funs_local, unique_funs_local)
-
-#     N                    = length(state_funs)
-#     # N_reductions0        = min(N_reductions, length(vars))  # to be checked
-#     subtractor_vars      = SVector{N}(i ≤ N_reductions ? values(vars)[i] : 0e0 for i in 1:N)
-
-#     inds_args_to_x       = generate_indices_from_args_to_x(funs_local, reduction_ind, Val(N_reductions))
-
-#     # mapping from the state functions to the subtractor
-#     inds_x_to_subtractor = mapping_x_to_subtractor(state_funs, unique_funs_local)
-#     # template for args to do pattern matching later
-#     args_template       = tuple(args_reduction..., args_local...)
-
-#     # need to expand the composite for the local equations
-#     composite_expanded  = expand_series_composite(composite, funs_local, Val(N_reductions))
-#     composite_global,   = split_series_composite(composite, unique_funs_global, funs_local)
-    
-#     Composite(
-#         composite,
-#         composite_expanded,
-#         composite_global,
-#         state_funs,
-#         unique_funs_global,
-#         subtractor_vars,
-#         inds_x_to_subtractor,
-#         inds_args_to_x,
-#         reduction_ind,
-#         args_template,
-#         Val(N_reductions)
-#     )
-# end
-
-# Composite(c, vars, args_solve)
-
 @inline global_series_functions(c::SeriesModel) = series_state_functions(c.leafs) |> flatten_repeated_functions |> global_series_state_functions
 @inline local_series_functions(c::SeriesModel)  = series_state_functions(c.leafs) |> flatten_repeated_functions |> local_series_state_functions
 
@@ -265,19 +197,19 @@ function residual_length(c::SeriesModel)
     return nseries_global + nseries_local + sum(nparallel_global) + sum(nparallel_local)
 end
 
-Nr          = residual_length(c)
-Np          = count_parallel_elements(c)
-Ns          = count_series_elements(c)
-x           = @SVector zeros(Nr) # solution vector
-Ns_global   = count_global_functions(c)
-Np_global   = count_global_parallel_functions(c)
+# Nr          = residual_length(c)
+# Np          = count_parallel_elements(c)
+# Ns          = count_series_elements(c)
+# x           = @SVector zeros(Nr) # solution vector
+# Ns_global   = count_global_functions(c)
+# Np_global   = count_global_parallel_functions(c)
 
-Ns_equations        = count_series_equations(c) # total number of eqs in the series part
-Np_global_equations = count_unique_parallel_functions(c) # number of global eqs in the parallel part
+# Ns_equations        = count_series_equations(c) # total number of eqs in the series part
+# Np_global_equations = count_unique_parallel_functions(c) # number of global eqs in the parallel part
 
 struct FunctionsAndArgs{T1, T2}
-    fns::T1  # functions corresponding to the series and parallel parts 
-    keys::T2 # keys of the arguments for every equation in the residual
+    fns::T1    # functions corresponding to the series and parallel parts 
+    kwargs::T2 # kwarg templates of the arguments for every equation in the residual
 
     function FunctionsAndArgs(c::SeriesModel)
         Np                 = count_parallel_elements(c)
@@ -304,7 +236,6 @@ struct FunctionsAndArgs{T1, T2}
     end
 end
 
-fns_args = FunctionsAndArgs(c)
 
 struct EquationNumbering{Nr, Ns_equations, Np, Np_global_equations}
     series::NTuple{Ns_equations, Int}
@@ -329,30 +260,27 @@ end
 
 count_residuals(::EquationNumbering{N}) where N = N
 
-eqnum = EquationNumbering(c)
-eqnum.series
-eqnum.parallel
+# eqnum.series
+# eqnum.parallel
 
-x_mapping_series = ntuple(Val(Ns_equations)) do i
-    i, getindex.(eqnum.parallel, i)...
-end
-x_mapping_parallel = ntuple(Val(Np)) do i
-    getindex.(eqnum.parallel, i)
-end
-# this is maps the index of the elements in x that are needed as arguments for every residual equation
-x_mapping    = (x_mapping_series..., x_mapping_parallel...)
+# x_mapping_series = ntuple(Val(Ns_equations)) do i
+#     i, getindex.(eqnum.parallel, i)...
+# end
+# x_mapping_parallel = ntuple(Val(Np)) do i
+#     getindex.(eqnum.parallel, i)
+# end
+# # this is maps the index of the elements in x that are needed as arguments for every residual equation
+# x_mapping    = (x_mapping_series..., x_mapping_parallel...)
 
-function evaluate_residual_series(c::SeriesModel, x, fns_args, eqnum)
-    arg_kwargs   = first(fns_args.keys)
+function evaluate_residual_series(c::SeriesModel, x, vars, fns_args, eqnum)
+    arg_kwargs   = first(fns_args.kwargs)
     fns          = fns_args.fns
     fns_series   = first(fns)
     # fns_parallel = Base.tail(fns)
 
-    Ns          = count_series_elements(c)
-    keys_series = keys(arg_kwargs)
-    val_series  = ntuple(Val(Ns)) do i
-        x[i]
-    end
+    Ns            = count_series_elements(c)
+    keys_series   = keys(arg_kwargs)
+    val_series    = ntuple(i -> x[i], Val(Ns))
     kwarg_series0 = (; zip(keys_series, val_series)...)
 
     # generate kwargs that are passed into the state functions
@@ -373,16 +301,16 @@ function evaluate_residual_series(c::SeriesModel, x, fns_args, eqnum)
         end
     end
 
+    vals_vars = values(vars)
     residual_series = ntuple(Val(Ns_equations)) do i
-        fns_series[i](c.leafs[i], kwargs_series[i]) + sum(vals_to_reduce_series[i])
+        fns_series[i](c.leafs[i], kwargs_series[i]) + sum(vals_to_reduce_series[i]) - vals_vars[i]
     end
+    return residual_series
 end
 
-evaluate_residual_series(c, x, fns_args, eqnum)
-
-# function evaluate_residual_parallel(c::SeriesModel, x, fns_args, eqnum)
-    arg_kwargs   = Base.tail(fns_args.keys)
-    fns          = Base.tail(fns_args.fns)
+function evaluate_residual_parallel(c::SeriesModel, x, fns_args, eqnum)
+    arg_kwargs    = Base.tail(fns_args.kwargs)
+    fns           = Base.tail(fns_args.fns)
 
     Ns            = count_series_elements(c)
     Np            = count_parallel_elements(c)
@@ -390,7 +318,7 @@ evaluate_residual_series(c, x, fns_args, eqnum)
     val_parallel  = ntuple(Val(Np)) do i
         shift0 = i > 1 ? (i - 1) * length(fns[i-1]) : 0
         shift  = Ns + shift0
-        x[i + Ns] 
+        x[i + shift] 
     end
     kwarg_parallel0 = ntuple(Val(Np)) do i
         (; zip(keys_parallel[i], val_parallel[i])...)
@@ -408,18 +336,46 @@ evaluate_residual_series(c, x, fns_args, eqnum)
     end
 
     # generate kwargs that need to be reduced, these are the variables in x that come from either local functions or parallel elements
-    Ns_global   = count_global_functions(c)
-    vals_to_reduce_parallel = ntuple(Val(Ns_global)) do i
-        # x[i + Ns_global]
-        inds = getindex.(eqnum.parallel, 1)
-        ntuple(Val(length(inds))) do j
-            x[inds[j]]
+    vals_to_reduce_parallel = ntuple(Val(Np)) do j 
+        inds = eqnum.parallel[j]
+        ntuple(Val(length(inds))) do i
+            x[inds[i]]
         end
     end
+    residual_parallel = ntuple(Val(Np)) do i
+        @inline
+        leafs = c.branches[i].leafs
+        fnsᵢ  = Base.IteratorsMD.flatten(fns[i])
+        Nc    = length(leafs) # number of composites
+        Neq   = length(fnsᵢ) # number of composites
+        ntuple(Val(Neq)) do j
+            @inline
+            y = ntuple(Val(Nc)) do k
+                @inline
+                fnsᵢ[j](leafs[k], kwargs_parallel[i][j]) 
+            end
+            sum(y) + sum(vals_to_reduce_parallel[i]) - x[j]
+        end
+    end
+    Base.IteratorsMD.flatten(residual_parallel)
+end
 
-    # residual_parallel = ntuple(Val(Ns_equations)) do i
-    #     fns[i](c.leafs[i], kwargs_parallel[i]) + sum(vals_to_reduce_parallel[i])
-    # end
-# end
+function evaluate_residuals(c, x, vars, fns_args, eqnum)
+    r_series   = evaluate_residual_series(c, x, vars, fns_args, eqnum)
+    r_parallel = evaluate_residual_parallel(c, x, fns_args, eqnum)
+    r = SA[r_series..., r_parallel...]
+end
 
-@code_warntype evaluate_residual_parallel(c, x, fns_args, eqnum)
+fns_args = FunctionsAndArgs(c)
+eqnum = EquationNumbering(c)
+
+x = @SVector [
+    1e2      # stress guess
+    1e-15/2  # strain partitioning guess
+]
+R, J = value_and_jacobian(        
+    x ->  evaluate_residuals(c, x, vars, fns_args, eqnum),
+    AutoForwardDiff(), 
+    x
+);
+J
