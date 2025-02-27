@@ -195,8 +195,8 @@ function isvolumetric(r::DruckerPrager)
         return true
     end
 end
-isvolumetric(r::SeriesModel) = any(isvolumetric.(r.children))
-isvolumetric(r::ParallelModel) = any(isvolumetric.(r.siblings))
+# isvolumetric(r::SeriesModel) = any(isvolumetric.(r.children))
+# isvolumetric(r::ParallelModel) = any(isvolumetric.(r.siblings))
 
 #####
 

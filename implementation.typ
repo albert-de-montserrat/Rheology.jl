@@ -121,16 +121,38 @@ $
     r(tau);
     r(epsilon^("p"));
   ) = mat(
-    -tau + 2 eta _2 epsilon^("p") + (2 eta _2 epsilon^("p"))^n;
     -epsilon + 1 / (2 eta_1) tau + epsilon^("p");
+    -tau + 2 eta _2 epsilon^("p") + (2 eta_3 epsilon^("p"))^n;
   )
 $
 $
   J = mat(
-    2 eta _2 + (2 eta _2)^(n) n epsilon^"p"^(n-1), -1;
-    1, 1 / (2 eta_1),;
+    1 / (2 eta_1), 1;
+    -1, 2 eta _2 + (2 eta_3)^(n) n epsilon^"p"^(n-1);
   )
 $
+// $
+//   x = mat(
+//     tau;
+//     epsilon^("p");
+//   )
+// $
+
+// $
+//   r = mat(
+//     r(tau);
+//     r(epsilon^("p"));
+//   ) = mat(
+//     -tau + 2 eta _2 epsilon^("p") + (2 eta _2 epsilon^("p"))^n;
+//     -epsilon + 1 / (2 eta_1) tau + epsilon^("p");
+//   )
+// $
+// $
+//   J = mat(
+//     2 eta _2 + (2 eta _2)^(n) n epsilon^"p"^(n-1), -1;
+//     1, 1 / (2 eta_1),;
+//   )
+// $
 
 == What do we need
 
@@ -162,6 +184,28 @@ $
   )
 $
 
+
+
+$
+  r = mat(
+    mat(
+      "r"_"global equations";
+      dots.v;
+      "r"_"local series equations";
+    );
+    mat(
+      "r"_"global equations parallel"_1;
+      dots.v;
+      "r"_"local parallel equations parallel"_1;
+    );
+    dots.v;
+    mat(
+      "r"_"global equations parallel"_n;
+      dots.v;
+      "r"_"local parallel equations parallel"_n;
+    )
+  )
+$
 
 
 // $
@@ -221,3 +265,7 @@ $
 //    -1,                       0,                 ((2 eta)^(1/n) epsilon^"pl"^(1/n-1)) / n;
 //   )
 // $
+// 
+// 
+// 
+// 
