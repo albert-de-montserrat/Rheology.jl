@@ -252,7 +252,7 @@ count_residuals(::EquationNumbering{N}) where N = N
 # # this is maps the index of the elements in x that are needed as arguments for every residual equation
 # x_mapping    = (x_mapping_series..., x_mapping_parallel...)
 
-function evaluate_residual_series(c::SeriesModel, x, vars, fns_args, eqnum)
+function evaluate_residual_series(c::SeriesModel, x, vars, fns_args, eqnum, args_other)
     arg_kwargs   = first(fns_args.kwargs)
     fns          = fns_args.fns
     fns_series   = first(fns)
@@ -269,7 +269,7 @@ function evaluate_residual_series(c::SeriesModel, x, vars, fns_args, eqnum)
     kwargs_series = ntuple(Val(Ns_equations)) do i
         fn       = fns_series[i]
         fn_kwarg = differentiable_kwargs(fn)
-        merge(fn_kwarg, kwarg_series0)
+        merge(fn_kwarg, kwarg_series0, args_other)
     end
 
     # generate kwargs that need to be reduced, these are the variables in x that come from either local functions or parallel elements
@@ -289,7 +289,7 @@ function evaluate_residual_series(c::SeriesModel, x, vars, fns_args, eqnum)
     return residual_series
 end
 
-function evaluate_residual_parallel(c::SeriesModel, x, fns_args, eqnum)
+function evaluate_residual_parallel(c::SeriesModel, x, fns_args, eqnum, args_other)
     arg_kwargs    = Base.tail(fns_args.kwargs)
     fns           = Base.tail(fns_args.fns)
 
@@ -341,9 +341,9 @@ function evaluate_residual_parallel(c::SeriesModel, x, fns_args, eqnum)
     Base.IteratorsMD.flatten(residual_parallel)
 end
 
-function evaluate_residuals(c, x, vars, fns_args, eqnum)
-    r_series   = evaluate_residual_series(c, x, vars, fns_args, eqnum)
-    r_parallel = evaluate_residual_parallel(c, x, fns_args, eqnum)
+function evaluate_residuals(c, x, vars, fns_args, eqnum, args_other)
+    r_series   = evaluate_residual_series(c, x, vars, fns_args, eqnum, args_other)
+    r_parallel = evaluate_residual_parallel(c, x, fns_args, eqnum, args_other)
     r          = SA[r_series..., r_parallel...]
 end
 
@@ -355,29 +355,36 @@ powerlaw   = PowerLawViscosity(5e19, 3)
 drucker    = DruckerPrager(1e6, 10.0, 0.0)
 elastic    = Elasticity(1e10, 1e12) # im making up numbers
 
+# composite  = viscous1, powerlaw
+# p = ParallelModel(viscous1, powerlaw)
+# c = SeriesModel(viscous1, viscous2, p)
+
+# vars       = (; ε  = 1e-15,) # input variables
+# args_solve = (; τ  = 1e2,  ) # we solve for this, initial guess
+# args_other = (; ) # other args that may be needed, non differentiable
+
 composite  = viscous1, powerlaw
 p = ParallelModel(viscous1, powerlaw)
-c = SeriesModel(viscous1, viscous2, p)
-# c.leafs  # all the guys in series
-# c.branches[1].leafs    # all the guys in the parallel element(s)
-# c.branches[1].branches # all the guys in the series within a parallel leaf
+c = SeriesModel(viscous1, elastic, p)
 
-vars       = (; ε  = 1e-15,) # input variables
-args_solve = (; τ  = 1e2,  ) # we solve for this, initial guess
-args_other = (; ) # other args that may be needed, non differentiable
+vars       = (; ε  = 1e-15, θ = 1e-15) # input variables
+args_solve = (; τ  = 1e2,   P = 1e6  ) # we solve for this, initial guess
+args_other = (; dt = 1e10            ) # other args that may be needed, non differentiable
 
 fns_args = FunctionsAndArgs(c)
 eqnum    = EquationNumbering(c)
 
-r_series   = evaluate_residual_series(c, x, vars, fns_args, eqnum)
-r_parallel = evaluate_residual_parallel(c, x, fns_args, eqnum)
-
-x = @SVector [
-    1e2      # stress guess
+x = SA[
+    values(args_solve)...,
     1e-15    # strain partitioning guess
 ]
+
+r_series   = evaluate_residual_series(c, x, vars, fns_args, eqnum, args_other)
+r_parallel = evaluate_residual_parallel(c, x, fns_args, eqnum, args_other)
+evaluate_residuals(c, x, vars, fns_args, eqnum, args_other)
+
 R, J = value_and_jacobian(        
-    x ->  evaluate_residuals(c, x, vars, fns_args, eqnum),
+    x ->  evaluate_residuals(c, x, vars, fns_args, eqnum, args_other),
     AutoForwardDiff(), 
     x
 );
