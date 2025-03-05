@@ -302,6 +302,7 @@ function evaluate_residual_series(c::SeriesModel, x, vars, fns_args, eqnum, args
         end
     end
 
+    #=
     vals_vars = values(vars)
     Nlocal = count_local_series_functions(c)
     residual_series = ntuple(Val(Ns_equations)) do i
@@ -387,8 +388,8 @@ composite  = viscous1, powerlaw
 p = ParallelModel(viscous1, powerlaw)
 c = SeriesModel(viscous1, drucker, p)
 
-vars       = (; ε  = 1e-15,) # input variables
-args_solve = (; τ  = 1e2,  ) # we solve for this, initial guess
+vars       = (; ε  = 1e-15,θ = 1e-15) # input variables
+args_solve = (; τ  = 1e2,  P=100) # we solve for this, initial guess
 args_other = (; ) # other args that may be needed, non differentiable
 
 vars       = (; ε  = 1e-15, λ = 0e0) # input variables
@@ -403,13 +404,12 @@ args_other = (; ) # other args that may be needed, non differentiable
 # args_solve = (; τ  = 1e2,   P = 1e6  ) # we solve for this, initial guess
 # args_other = (; dt = 1e10            ) # other args that may be needed, non differentiable
 
-# composite  = viscous1, powerlaw
-# p = ParallelModel(viscous1, powerlaw)
-# c = SeriesModel(viscous1, p, p)
-
-# vars       = (; ε  = 1e-15, θ = 1e-15) # input variables
-# args_solve = (; τ  = 1e2,   P = 1e6  ) # we solve for this, initial guess
-# args_other = (; dt = 1e10            ) # other args that may be needed, non differentiable
+#=
+p = ParallelModel(viscous1, powerlaw)
+c = SeriesModel(viscous1, p, p)
+vars       = (; ε  = 1e-15,          ) # input variables
+args_solve = (; τ  = 1e2,            ) # we solve for this, initial guess
+args_other = (; dt = 1e10            ) # other args that may be needed, non differentiable
 
 fns_args = FunctionsAndArgs(c)
 eqnum    = EquationNumbering(c)
@@ -419,6 +419,7 @@ x = SA[
     1e-15,    # strain partitioning guess
     # 1e-15,    # strain partitioning guess
 ]
+=#
 
 R, J = value_and_jacobian(        
     x ->  evaluate_residuals(c, x, vars, fns_args, eqnum, args_other),
