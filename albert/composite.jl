@@ -216,10 +216,29 @@ struct FunctionsAndArgs{T1, T2}
     end
 end
 
+# struct EquationNumbering{Nr, Ns_equations, Np, Np_global_equations}
+#     series::NTuple{Ns_equations, Int}
+#     parallel::NTuple{Np, NTuple{Np_global_equations, Int}}
 
-struct EquationNumbering{Nr, Ns_equations, Np, Np_global_equations}
-    series::NTuple{Ns_equations, Int}
-    parallel::NTuple{Np, NTuple{Np_global_equations, Int}}
+#     function EquationNumbering(c::SeriesModel)
+#         Ns_equations        = count_series_equations(c) # total number of eqs in the series part
+#         Np                  = count_parallel_elements(c)
+#         Np_global_equations = count_unique_parallel_functions(c) # number of global eqs in the parallel part
+
+#         eqnum_series   = ntuple(i -> i, Val(Ns_equations)) 
+#         eqnum_parallel = ntuple(Val(Np)) do i 
+#             ntuple(Val(Np_global_equations[i])) do j
+#                 j + Ns_equations
+#             end
+#         end
+#         # number of residuals
+#         Nr = 1 + length(eqnum_parallel)
+#         new{Nr, Ns_equations, Np, sum(Np_global_equations)}(eqnum_series, eqnum_parallel)
+#     end
+# end
+struct EquationNumbering{T1, T2}
+    series::T1
+    parallel::T2
 
     function EquationNumbering(c::SeriesModel)
         Ns_equations        = count_series_equations(c) # total number of eqs in the series part
@@ -234,7 +253,7 @@ struct EquationNumbering{Nr, Ns_equations, Np, Np_global_equations}
         end
         # number of residuals
         Nr = 1 + length(eqnum_parallel)
-        new{Nr, Ns_equations, Np, sum(Np_global_equations)}(eqnum_series, eqnum_parallel)
+        new{typeof.((eqnum_series, eqnum_parallel))...}(eqnum_series, eqnum_parallel)
     end
 end
 
@@ -291,7 +310,8 @@ end
 
 function evaluate_residual_parallel(c::SeriesModel, x, fns_args, eqnum, args_other)
     arg_kwargs    = Base.tail(fns_args.kwargs)
-    fns           = Base.tail(fns_args.fns)
+    fns           = last(fns_args.fns)
+    # fns           = Base.tail(fns_args.fns)
 
     Ns            = count_series_equations(c)
     Np            = count_parallel_elements(c)
@@ -307,10 +327,11 @@ function evaluate_residual_parallel(c::SeriesModel, x, fns_args, eqnum, args_oth
 
     # generate kwargs that are passed into the state functions
     kwargs_parallel = ntuple(Val(Np)) do j
-        Np_equations = sum(length.(fns[j]))
+        Np_equations = sum(length(fns[j]))
         kwarg_parallelⱼ = kwarg_parallel0[j]
         ntuple(Val(Np_equations)) do i
-            fn       = Base.IteratorsMD.flatten(fns[i])
+            # fn       = Base.IteratorsMD.flatten(fns[i])
+            fn       = fns[i]
             fn_kwarg = differentiable_kwargs(fn)
             merge(fn_kwarg, kwarg_parallelⱼ)
         end
@@ -326,7 +347,8 @@ function evaluate_residual_parallel(c::SeriesModel, x, fns_args, eqnum, args_oth
     residual_parallel = ntuple(Val(Np)) do i
         @inline
         leafs = c.branches[i].leafs
-        fnsᵢ  = Base.IteratorsMD.flatten(fns[i])
+        # fnsᵢ  = Base.IteratorsMD.flatten(fns[i])
+        fnsᵢ  = fns[i]
         Nc    = length(leafs) # number of composites
         Neq   = length(fnsᵢ) # number of composites
         ntuple(Val(Neq)) do j
@@ -363,9 +385,17 @@ elastic    = Elasticity(1e10, 1e12) # im making up numbers
 # args_solve = (; τ  = 1e2,  ) # we solve for this, initial guess
 # args_other = (; ) # other args that may be needed, non differentiable
 
+# composite  = viscous1, powerlaw
+# p = ParallelModel(viscous1, powerlaw)
+# c = SeriesModel(viscous1, elastic, p)
+
+# vars       = (; ε  = 1e-15, θ = 1e-15) # input variables
+# args_solve = (; τ  = 1e2,   P = 1e6  ) # we solve for this, initial guess
+# args_other = (; dt = 1e10            ) # other args that may be needed, non differentiable
+
 composite  = viscous1, powerlaw
 p = ParallelModel(viscous1, powerlaw)
-c = SeriesModel(viscous1, elastic, p)
+c = SeriesModel(viscous1, p, p)
 
 vars       = (; ε  = 1e-15, θ = 1e-15) # input variables
 args_solve = (; τ  = 1e2,   P = 1e6  ) # we solve for this, initial guess
@@ -376,7 +406,8 @@ eqnum    = EquationNumbering(c)
 
 x = SA[
     values(args_solve)...,
-    1e-15    # strain partitioning guess
+    1e-15,    # strain partitioning guess
+    1e-15,    # strain partitioning guess
 ]
 
 r_series   = evaluate_residual_series(c, x, vars, fns_args, eqnum, args_other)
