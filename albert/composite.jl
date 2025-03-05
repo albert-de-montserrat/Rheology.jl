@@ -245,10 +245,11 @@ struct EquationNumbering{T1, T2}
         Np                  = count_parallel_elements(c)
         Np_global_equations = count_unique_parallel_functions(c) # number of global eqs in the parallel part
 
-        eqnum_series   = ntuple(i -> i, Val(Ns_equations)) 
+        eqnum_series   = ntuple(i -> i, Val(Ns_equations))
+        shifts         = ntuple(i -> isone(i) ? 0 : Np_global_equations[i-1], Val(Np))
         eqnum_parallel = ntuple(Val(Np)) do i 
             ntuple(Val(Np_global_equations[i])) do j
-                j + Ns_equations
+                j + Ns_equations + shifts[i]
             end
         end
         # number of residuals
@@ -318,8 +319,8 @@ function evaluate_residual_parallel(c::SeriesModel, x, fns_args, eqnum, args_oth
     keys_parallel = keys.(arg_kwargs)
     val_parallel  = ntuple(Val(Np)) do i
         shift0 = i > 1 ? (i - 1) * length(fns[i-1]) : 0
-        shift  = Ns + shift0
-        x[i + shift] 
+        shift  = Ns + shift0 + 1
+        x[shift] 
     end
     kwarg_parallel0 = ntuple(Val(Np)) do i
         (; zip(keys_parallel[i], val_parallel[i])...)
@@ -363,6 +364,8 @@ function evaluate_residual_parallel(c::SeriesModel, x, fns_args, eqnum, args_oth
     Base.IteratorsMD.flatten(residual_parallel)
 end
 
+r_parallel = evaluate_residual_parallel(c, x, fns_args, eqnum, args_other)
+
 function evaluate_residuals(c, x, vars, fns_args, eqnum, args_other)
     r_series   = evaluate_residual_series(c, x, vars, fns_args, eqnum, args_other)
     r_parallel = evaluate_residual_parallel(c, x, fns_args, eqnum, args_other)
@@ -377,13 +380,13 @@ powerlaw   = PowerLawViscosity(5e19, 3)
 drucker    = DruckerPrager(1e6, 10.0, 0.0)
 elastic    = Elasticity(1e10, 1e12) # im making up numbers
 
-# composite  = viscous1, powerlaw
-# p = ParallelModel(viscous1, powerlaw)
-# c = SeriesModel(viscous1, viscous2, p)
+composite  = viscous1, powerlaw
+p = ParallelModel(viscous1, powerlaw)
+c = SeriesModel(viscous1, p, p)
 
-# vars       = (; ε  = 1e-15,) # input variables
-# args_solve = (; τ  = 1e2,  ) # we solve for this, initial guess
-# args_other = (; ) # other args that may be needed, non differentiable
+vars       = (; ε  = 1e-15,) # input variables
+args_solve = (; τ  = 1e2,  ) # we solve for this, initial guess
+args_other = (; ) # other args that may be needed, non differentiable
 
 # composite  = viscous1, powerlaw
 # p = ParallelModel(viscous1, powerlaw)
@@ -393,13 +396,13 @@ elastic    = Elasticity(1e10, 1e12) # im making up numbers
 # args_solve = (; τ  = 1e2,   P = 1e6  ) # we solve for this, initial guess
 # args_other = (; dt = 1e10            ) # other args that may be needed, non differentiable
 
-composite  = viscous1, powerlaw
-p = ParallelModel(viscous1, powerlaw)
-c = SeriesModel(viscous1, p, p)
+# composite  = viscous1, powerlaw
+# p = ParallelModel(viscous1, powerlaw)
+# c = SeriesModel(viscous1, p, p)
 
-vars       = (; ε  = 1e-15, θ = 1e-15) # input variables
-args_solve = (; τ  = 1e2,   P = 1e6  ) # we solve for this, initial guess
-args_other = (; dt = 1e10            ) # other args that may be needed, non differentiable
+# vars       = (; ε  = 1e-15, θ = 1e-15) # input variables
+# args_solve = (; τ  = 1e2,   P = 1e6  ) # we solve for this, initial guess
+# args_other = (; dt = 1e10            ) # other args that may be needed, non differentiable
 
 fns_args = FunctionsAndArgs(c)
 eqnum    = EquationNumbering(c)
