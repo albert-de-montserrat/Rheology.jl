@@ -303,9 +303,12 @@ function evaluate_residual_series(c::SeriesModel, x, vars, fns_args, eqnum, args
     end
 
     vals_vars = values(vars)
+    Nlocal = count_local_series_functions(c)
     residual_series = ntuple(Val(Ns_equations)) do i
-        fns_series[i](c.leafs[i], kwargs_series[i]) + sum(vals_to_reduce_series[i]) - vals_vars[i]
+        reduction_variables = i ≤ Ns_equations - Nlocal ? sum(vals_to_reduce_series[i]) : 0e0
+        fns_series[i](c.leafs[i], kwargs_series[i]) - vals_vars[i] + reduction_variables
     end
+
     return residual_series
 end
 
@@ -382,10 +385,14 @@ elastic    = Elasticity(1e10, 1e12) # im making up numbers
 
 composite  = viscous1, powerlaw
 p = ParallelModel(viscous1, powerlaw)
-c = SeriesModel(viscous1, p, p)
+c = SeriesModel(viscous1, drucker, p)
 
 vars       = (; ε  = 1e-15,) # input variables
 args_solve = (; τ  = 1e2,  ) # we solve for this, initial guess
+args_other = (; ) # other args that may be needed, non differentiable
+
+vars       = (; ε  = 1e-15, λ = 0e0) # input variables
+args_solve = (; τ  = 1e2,   λ = 0e0) # we solve for this, initial guess
 args_other = (; ) # other args that may be needed, non differentiable
 
 # composite  = viscous1, powerlaw
@@ -410,12 +417,8 @@ eqnum    = EquationNumbering(c)
 x = SA[
     values(args_solve)...,
     1e-15,    # strain partitioning guess
-    1e-15,    # strain partitioning guess
+    # 1e-15,    # strain partitioning guess
 ]
-
-r_series   = evaluate_residual_series(c, x, vars, fns_args, eqnum, args_other)
-r_parallel = evaluate_residual_parallel(c, x, fns_args, eqnum, args_other)
-evaluate_residuals(c, x, vars, fns_args, eqnum, args_other)
 
 R, J = value_and_jacobian(        
     x ->  evaluate_residuals(c, x, vars, fns_args, eqnum, args_other),
