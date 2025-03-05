@@ -368,7 +368,7 @@ function evaluate_residual_parallel(c::SeriesModel, x, fns_args, eqnum, args_oth
     Base.IteratorsMD.flatten(residual_parallel)
 end
 
-r_parallel = evaluate_residual_parallel(c, x, fns_args, eqnum, args_other)
+#r_parallel = evaluate_residual_parallel(c, x, fns_args, eqnum, args_other)
 
 function evaluate_residuals(c, x, vars, fns_args, eqnum, args_other)
     r_series   = evaluate_residual_series(c, x, vars, fns_args, eqnum, args_other)
