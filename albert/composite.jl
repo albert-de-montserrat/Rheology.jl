@@ -177,15 +177,32 @@ function residual_length(c::SeriesModel)
     return nseries_global + nseries_local + sum(nparallel_global) + sum(nparallel_local)
 end
 
-# Nr          = residual_length(c)
-# Np          = count_parallel_elements(c)
-# Ns          = count_series_elements(c)
-# x           = @SVector zeros(Nr) # solution vector
-# Ns_global   = count_global_functions(c)
-# Np_global   = count_global_parallel_functions(c)
+function generate_solution_vector_series(c::SeriesModel, fns_args, args_solve)
+    arg_kwargs    = first(fns_args.kwargs)
+    Ns_equations  = count_series_equations(c) # total number of eqs in the series part
+    keys_series   = keys(arg_kwargs)
+    return  ntuple(i -> args_solve[keys_series[i]], Val(Ns_equations))
+end
 
-# Ns_equations        = count_series_equations(c) # total number of eqs in the series part
-# Np_global_equations = count_unique_parallel_functions(c) # number of global eqs in the parallel part
+function generate_solution_vector_parallel(c::SeriesModel, fns_args, args_solve, vars)
+    merged_args   = merge(args_solve, vars) 
+    arg_kwargs    = Base.tail(fns_args.kwargs)
+    fns           = last(fns_args.fns)
+    Np            = count_parallel_elements(c)
+    ntuple(Val(Np)) do i
+        k = keys(arg_kwargs[i])
+        ntuple(Val(length(fns[i]))) do j
+            merged_args[k[j]]
+        end
+    end |> Base.IteratorsMD.flatten
+end
+
+function generate_solution_vector(c, fns_args, args_solve, vars)
+    SA[
+        generate_solution_vector_series(c, fns_args, args_solve)...,
+        generate_solution_vector_parallel(c, fns_args, args_solve, vars)...,
+    ]
+end
 
 struct FunctionsAndArgs{T1, T2}
     fns::T1    # functions corresponding to the series and parallel parts 
@@ -367,8 +384,6 @@ function evaluate_residual_parallel(c::SeriesModel, x, fns_args, eqnum, args_oth
     Base.IteratorsMD.flatten(residual_parallel)
 end
 
-r_parallel = evaluate_residual_parallel(c, x, fns_args, eqnum, args_other)
-
 function evaluate_residuals(c, x, vars, fns_args, eqnum, args_other)
     r_series   = evaluate_residual_series(c, x, vars, fns_args, eqnum, args_other)
     r_parallel = evaluate_residual_parallel(c, x, fns_args, eqnum, args_other)
@@ -413,12 +428,13 @@ args_other = (; ) # other args that may be needed, non differentiable
 
 fns_args = FunctionsAndArgs(c)
 eqnum    = EquationNumbering(c)
+x        = generate_solution_vector(c, fns_args, args_solve, vars)
 
-x = SA[
-    values(args_solve)...,
-    1e-15,    # strain partitioning guess
-    # 1e-15,    # strain partitioning guess
-]
+# x = SA[
+#     values(args_solve)...,
+#     1e-15,    # strain partitioning guess
+#     # 1e-15,    # strain partitioning guess
+# ]
 
 R, J = value_and_jacobian(        
     x ->  evaluate_residuals(c, x, vars, fns_args, eqnum, args_other),
@@ -429,7 +445,7 @@ J
 
 # r_parallel = evaluate_residual_parallel(c, x, fns_args, eqnum)
     
-# arg_kwargs = Base.tail(fns_args.kwargs)
-# keys       = keys.(arg_kwargs)
-# keys(arg_kwargs[1])
-   
+generate_solution_vector(c, fns_args, args_solve, vars)
+
+@b generate_solution_vector_($(c, fns_args, args_solve, vars)...)
+@code_warntype generate_solution_vector_(c, fns_args, args_solve, vars)
