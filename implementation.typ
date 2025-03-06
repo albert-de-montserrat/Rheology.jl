@@ -98,14 +98,14 @@ $
 $
 Total stress
 $
-  tau = tau_2 + tau_3 = 2 eta _2 epsilon^("p") + (2 eta _2 epsilon^("p"))^n
+  tau = tau_2 + tau_3 = 2 eta _2 epsilon^("p") + (2 eta _3 epsilon^("p"))^(1/n)
 $
 Strain rates of the individual elements in parallel
 $
   epsilon^("p") = 1 / (2 eta_2) tau_2 arrow tau_2 = 2 eta _2 epsilon^("p")
 $
 $
-  epsilon^("p") = 1 / (2 eta_3) tau_3^n arrow tau_3 = (2 eta _3 epsilon^("p"))^n
+  epsilon^("p") = 1 / (2 eta_3) tau_3^n arrow tau_3 = (2 eta _3 epsilon^("p"))^(1/n)
 $
 
 Then 
@@ -122,13 +122,13 @@ $
     r(epsilon^("p"));
   ) = mat(
     -epsilon + 1 / (2 eta_1) tau + epsilon^("p");
-    -tau + 2 eta _2 epsilon^("p") + (2 eta_3 epsilon^("p"))^n;
+    -tau + 2 eta _2 epsilon^("p") + (2 eta_3 epsilon^("p"))^(1/n);
   )
 $
 $
   J = mat(
     1 / (2 eta_1), 1;
-    -1, 2 eta _2 + (2 eta_3)^(n) n epsilon^"p"^(n-1);
+    -1, 2 eta _2 + (2 eta_3)^(1/n)/n (epsilon^"p")^(1/n-1);
   )
 $
 // $
