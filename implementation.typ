@@ -1,7 +1,7 @@
 // #import "@preview/equate:0.3.0": equate
 
 // #show: equate.with(breakable: true, sub-numbering: true)
-#set math.equation(numbering: "(1.1)")
+//#set math.equation(numberi: "(1.1)")
 #set heading(numbering: "1.1")
 
 = Problem 1: series
@@ -207,6 +207,51 @@ $
   )
 $
 
+
+= Problem 3: series(visco)-parallel(series(visco - power law) - power law)
+
+Total strain rate of first series element $epsilon$:
+$
+  epsilon = epsilon^"viscous" + epsilon^"parallel" = 1 / (2 eta_1) tau + epsilon^("p")
+$
+Total stress of parallel element
+$
+  tau = tau_2 + tau_3 = tau_2 + (2 eta _2 epsilon^("p"))^(1/n)
+$
+
+Total strain rate of second series element $epsilon^"p"$:
+$
+  epsilon^"p" = epsilon^"viscous2" + epsilon^"powerlaw2" = 1 / (2 eta_3) tau_2 +  1 / (2 eta_4) tau_2^n
+$
+
+Then 
+$
+  x = mat(
+    tau;
+    epsilon^("p");
+    tau_2
+  )
+$
+
+$
+  r = mat(
+    r(tau);
+    r(epsilon^("p"));
+    r(tau_2);
+  ) = mat(
+    -epsilon + 1 / (2 eta_1) tau + epsilon^("p");
+    -tau + tau_2 + (2 eta_2 epsilon^("p"))^(1/n);
+    -epsilon^"p" + 1 / (2 eta_3) tau_2 +  1 / (2 eta_4) tau_2^"n";
+  )
+$
+
+$
+  J = mat(
+    1 / (2 eta_1), 1, 0;
+    -1, 2 eta _2 + ((2 eta_2)^(1/n) /n) (epsilon^"p")^(1/n-1), 1;
+    0,-1,1 / (2 eta_3) + n / (2 eta_4) tau_2^(n-1);
+  )
+$
 
 // $
 //   x = mat(
