@@ -208,7 +208,7 @@ $
 $
 
 
-= Problem 3: series(visco)-parallel(series(visco - power law) - power law)
+= Problem 3: series( visco - parallel(series(visco - power law) - power law) )
 
 Total strain rate of first series element $epsilon$:
 $
@@ -250,6 +250,55 @@ $
     1 / (2 eta_1), 1, 0;
     -1, 2 eta _2 + ((2 eta_2)^(1/n) /n) (epsilon^"p")^(1/n-1), 1;
     0,-1,1 / (2 eta_3) + n / (2 eta_4) tau_2^(n-1);
+  )
+$
+
+
+\newpage
+
+
+= Problem 4: parallel( series(visco - parallel(series(visco - power law) - power law)) - visco)
+
+The next step in increasing complexity starts with a parallel element. Total stress of the main parallel element (with strainrate $epsilon_1$). I'll number all elements consecutively
+$
+  tau_1 = tau_2 + tau_3 = tau_2 + 2 eta _1 epsilon_1
+$
+
+Total strain rate of series element (#2) $epsilon_1$:
+$
+  epsilon_1 = epsilon^"viscous,4" + epsilon^"parallel,5" = 1 / (2 eta_2) tau_2 + epsilon_5
+$
+
+Total stress of second parallel element (#5)
+$
+  tau_5 = tau_6 + tau_7 = tau_6 + (2 eta _3 epsilon_5)^(1/n)
+$
+
+Total strain rate of second series element (#6) $epsilon_5$:
+$
+  epsilon_5 = epsilon^"viscous8" + epsilon^"powerlaw9" = 1 / (2 eta_4) tau_6 +  1 / (2 eta_5) tau_6^n
+$
+
+Then 
+$
+  x = mat(
+    epsilon_1;
+    tau_2;
+    epsilon_5;
+    tau_6
+  )
+$
+$
+  r = mat(
+    r(epsilon_1);
+    r(tau_2);
+    r(epsilon_5);
+    r(tau_6);
+  ) = mat(
+    -tau_1 + tau_2 + 2 eta_1 epsilon_1;
+    -epsilon_1 + 1 / (2 eta_2) tau_2 + epsilon_5;
+    -tau_5 + tau_6 + (2 eta_3 epsilon_5)^(1/n);
+    -epsilon_5 + 1 / (2 eta_4) tau_6 +  1 / (2 eta_5) tau_6^"n";
   )
 $
 
