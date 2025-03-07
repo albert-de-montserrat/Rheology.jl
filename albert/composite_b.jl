@@ -136,26 +136,14 @@ end
 @inline local_series_functions(c::SeriesModel)  = series_state_functions(c.leafs) |> flatten_repeated_functions |> local_series_state_functions
 
 @inline global_parallel_functions(c::SeriesModel) = ntuple(i-> parallel_state_functions(c.branches[i].leafs) |> flatten_repeated_functions |> global_parallel_state_functions, Val(count_parallel_elements(c))) 
-# @inline local_parallel_functions(c::SeriesModel)  = ntuple(i-> parallel_state_functions(c.branches[i].branches) |> flatten_repeated_functions |> local_parallel_state_functions, Val(count_parallel_elements(c))) 
-
-@inline function local_parallel_functions(c::SeriesModel) 
-    Np = count_parallel_elements(c)
-    ntuple(Val(Np)) do i
-        branch  = c.branches[i]
-        Nb      = length(branch.branches)
-        ntuple(Val(Nb)) do j
-            global_series_functions(branch.branches[j])
-        end |> Base.IteratorsMD.flatten 
-        # |> flatten_repeated_functions #|> local_parallel_state_functions
-    end
-end
+@inline local_parallel_functions(c::SeriesModel)  = ntuple(i-> parallel_state_functions(c.branches[i].leafs) |> flatten_repeated_functions |> local_parallel_state_functions, Val(count_parallel_elements(c))) 
 
 @inline count_series_elements(c::SeriesModel)           = length(c.leafs)
 @inline count_parallel_elements(c::SeriesModel)         = length(c.branches)
 # count all the equations
 @inline count_unique_series_functions(c::SeriesModel)   = length(series_state_functions(c.leafs) |> flatten_repeated_functions)
 @inline count_unique_parallel_functions(c::SeriesModel) = ntuple(i-> length(parallel_state_functions(c.branches[i].leafs)  |> flatten_repeated_functions ), Val(count_parallel_elements(c))) 
-@inline count_parallel_functions(c::SeriesModel)        = sum(length.(global_parallel_functions(c))) + sum(length.(local_parallel_functions(c)))
+@inline count_parallel_functions(c::SeriesModel)        = ntuple(i-> length(parallel_state_functions(c.branches[i].leafs)), Val(count_parallel_elements(c))) 
 @inline count_equations(c::SeriesModel)                 = count_unique_series_functions(c) + sum(count_unique_parallel_functions(c))
 @inline count_series_equations(c::SeriesModel)          = count_unique_series_functions(c)
 @inline count_parallel_equations(c::SeriesModel)        = count_parallel_functions(c)
@@ -164,6 +152,7 @@ end
 @inline count_global_functions(c::SeriesModel)          = global_series_functions(c) |> length
 # count local equations (if any) related to the elements in series
 @inline count_local_series_functions(c::SeriesModel)    = local_series_functions(c) |> length
+
 
 # count global the equations for the parallel elements (i.e. counterparts of the global equations)
 @inline function count_global_parallel_functions(c::SeriesModel)
@@ -231,18 +220,14 @@ struct FunctionsAndArgs{T1, T2}
         # functions corresponding to the parallel part(s)
         fns_global_parallel = global_parallel_functions(c)
         fns_local_parallel  = local_parallel_functions(c)
-        fns_parallel_all    = ntuple(Val(Np)) do i 
+        fns_parallel        = ntuple(Val(Np)) do i 
             (fns_global_parallel[i]..., fns_local_parallel[i]...)
         end
-        fns_parallel    = ntuple(Val(Np)) do i 
-            (fns_global_parallel[i], fns_local_parallel[i])
-        end
-        args_parallel       = differentiable_kwargs.(fns_parallel_all)
+        args_parallel       = differentiable_kwargs.(fns_parallel)
         
         fns = (fns_series, fns_parallel)
         # args_keys_total = Base.IteratorsMD.flatten(keys.((args_series, args_parallel...)))
         args_keys_total = (args_series, args_parallel...)
-        # args_keys_total = (args_series, args_parallel)
         
         new{typeof(fns), typeof(args_keys_total)}(fns, args_keys_total)
     end
@@ -268,8 +253,6 @@ end
 #         new{Nr, Ns_equations, Np, sum(Np_global_equations)}(eqnum_series, eqnum_parallel)
 #     end
 # end
-
-
 struct EquationNumbering{T1, T2}
     series::T1
     parallel::T2
@@ -278,39 +261,33 @@ struct EquationNumbering{T1, T2}
         Ns_equations        = count_series_equations(c) # total number of eqs in the series part
         Np                  = count_parallel_elements(c)
         Np_global_equations = count_unique_parallel_functions(c) # number of global eqs in the parallel part
-        fns_parallel_local  = local_parallel_functions(c)
-        Np_local_equations  = length.(fns_parallel_local)
 
-        eqnum_series   = ntuple(Val(Ns_equations)) do i 
-            ind_parallel = ntuple(Val(Np)) do j
-                j + Ns_equations
-            end
-            i, ind_parallel
-        end
-        # eqnum_series   = ntuple(i -> i, Val(Ns_equations))
+        eqnum_series   = ntuple(i -> i, Val(Ns_equations))
         shifts         = ntuple(i -> isone(i) ? 0 : Np_global_equations[i-1], Val(Np))
-        # eqnum_parallel = ntuple(Val(Np)) do i 
-        #     ntuple(Val(Np_global_equations[i])) do j
-        #         j + Ns_equations + shifts[i]
-        #     end
-        # end
         eqnum_parallel = ntuple(Val(Np)) do i 
-            glob0 = ntuple(Val(Np_global_equations[i])) do j
-                Ns_equations + shifts[i] + j
+            ntuple(Val(Np_global_equations[i])) do j
+                j + Ns_equations + shifts[i]
             end
-            glob_locals = glob0 .+ Np_local_equations[i]
-            # loc = ntuple(Val(length(fns_parallel_local[i]))) do j
-            #     # glob[j] #+ j
-            #     glob[j] + Ns_equations
-            # end
-            ((glob0..., glob_locals...), glob0...)
-        end #|> Base.IteratorsMD.flatten
-
+        end
+        # number of residuals
+        Nr = 1 + length(eqnum_parallel)
         new{typeof.((eqnum_series, eqnum_parallel))...}(eqnum_series, eqnum_parallel)
     end
 end
 
 count_residuals(::EquationNumbering{N}) where N = N
+
+# eqnum.series
+# eqnum.parallel
+
+# x_mapping_series = ntuple(Val(Ns_equations)) do i
+#     i, getindex.(eqnum.parallel, i)...
+# end
+# x_mapping_parallel = ntuple(Val(Np)) do i
+#     getindex.(eqnum.parallel, i)
+# end
+# # this is maps the index of the elements in x that are needed as arguments for every residual equation
+# x_mapping    = (x_mapping_series..., x_mapping_parallel...)
 
 function evaluate_residual_series(c::SeriesModel, x, vars, fns_args, eqnum, args_other)
     arg_kwargs   = first(fns_args.kwargs)
@@ -332,13 +309,11 @@ function evaluate_residual_series(c::SeriesModel, x, vars, fns_args, eqnum, args
         merge(fn_kwarg, kwarg_series0, args_other)
     end
 
-    # generate kwargs that need to be reduced, these are the variables in x 
-    # that come from either local functions or parallel elements
+    # generate kwargs that need to be reduced, these are the variables in x that come from either local functions or parallel elements
     Ns_global   = count_global_functions(c)
     vals_to_reduce_series = ntuple(Val(Ns_global)) do i
         # x[i + Ns_global]
-        # inds = getindex.(eqnum.parallel, 1)
-        inds = eqnum.series[i] |> Base.IteratorsMD.flatten
+        inds = getindex.(eqnum.parallel, 1)
         ntuple(Val(length(inds))) do j
             x[inds[j]]
         end
@@ -358,17 +333,15 @@ function evaluate_residual_parallel(c::SeriesModel, x, fns_args, eqnum, args_oth
     arg_kwargs    = Base.tail(fns_args.kwargs)
     fns           = last(fns_args.fns)
     # fns           = Base.tail(fns_args.fns)
+
     Ns            = count_series_equations(c)
     Np            = count_parallel_elements(c)
     keys_parallel = keys.(arg_kwargs)
     val_parallel  = ntuple(Val(Np)) do i
         shift0 = i > 1 ? (i - 1) * length(fns[i-1]) : 0
-        ntuple(Val(length(fns[i]))) do j
-            shift  = Ns + shift0 + 1 + j-1
-            x[shift]
-        end
+        shift  = Ns + shift0 + 1
+        x[shift] 
     end
-
     kwarg_parallel0 = ntuple(Val(Np)) do i
         (; zip(keys_parallel[i], val_parallel[i])...)
     end
@@ -379,56 +352,34 @@ function evaluate_residual_parallel(c::SeriesModel, x, fns_args, eqnum, args_oth
         kwarg_parallelⱼ = kwarg_parallel0[j]
         ntuple(Val(Np_equations)) do i
             # fn       = Base.IteratorsMD.flatten(fns[i])
-            fn       = fns[j][i]
+            fn       = fns[i]
             fn_kwarg = differentiable_kwargs(fn)
             merge(fn_kwarg, kwarg_parallelⱼ)
         end
     end
 
-    # generate kwargs that need to be reduced, these are the variables
-    # in x that come from either local functions or parallel elements
-    vals_to_reduce_parallel = ntuple(Val(Np)) do k
-        indsₖ = eqnum.parallel[k]
-
-        ntuple(Val(length(indsₖ))) do j
-            inds = indsₖ[j]
-            ntuple(Val(length(inds))) do i
-                x[inds[i]]
-            end
+    # generate kwargs that need to be reduced, these are the variables in x that come from either local functions or parallel elements
+    vals_to_reduce_parallel = ntuple(Val(Np)) do j 
+        inds = eqnum.parallel[j]
+        ntuple(Val(length(inds))) do i
+            x[inds[i]]
         end
     end
-    
     residual_parallel = ntuple(Val(Np)) do i
         @inline
-        leafs    = c.branches[i].leafs
+        leafs = c.branches[i].leafs
         # fnsᵢ  = Base.IteratorsMD.flatten(fns[i])
-        fnsᵢ       = fns[i]
-        fns_global = fnsᵢ[1]
-        Nc         = length(leafs)    # number of composites
-        Neq        = length(fnsᵢ[1])  # number of equations
-        residual_global = ntuple(Val(Neq)) do j
+        fnsᵢ  = fns[i]
+        Nc    = length(leafs) # number of composites
+        Neq   = length(fnsᵢ) # number of composites
+        ntuple(Val(Neq)) do j
             @inline
             y = ntuple(Val(Nc)) do k
                 @inline
-                fns_global[j](leafs[k], kwargs_parallel[i][j]) 
+                fnsᵢ[j](leafs[k], kwargs_parallel[i][j]) 
             end
-            sum(y) + sum(vals_to_reduce_parallel[i][1]) - x[j]
+            sum(y) + sum(vals_to_reduce_parallel[i]) - x[j]
         end
-        
-        branches  = c.branches[i].branches
-        fns_local = fnsᵢ[2]
-        # Nb        = length(branches)
-        Neq_local = length(fnsᵢ[2])  # number of equations
-      
-        residual_local = ntuple(Val(Neq_local)) do j
-            @inline
-            y = ntuple(Val(length(branches[i].leafs))) do k
-                @inline
-                fns_local[j](branches[i].leafs[k], kwargs_parallel[i][j]) 
-            end
-            sum(y) + sum(vals_to_reduce_parallel[i][2]) #- x[j]
-        end
-        (residual_global..., residual_local...)
     end
     Base.IteratorsMD.flatten(residual_parallel)
 end
@@ -447,17 +398,18 @@ powerlaw   = PowerLawViscosity(5e19, 3)
 drucker    = DruckerPrager(1e6, 10.0, 0.0)
 elastic    = Elasticity(1e10, 1e12) # im making up numbers
 
-# composite  = viscous1, powerlaw
-# p = ParallelModel(viscous1, powerlaw)
-# c = SeriesModel(viscous1, drucker, p)
+composite  = viscous1, powerlaw
+s1 = SeriesModel(viscous1, powerlaw)
+p  = ParallelModel(viscous1, powerlaw)
+c  = SeriesModel(viscous1, p)
 
-# vars       = (; ε  = 1e-15,) # input variables
-# args_solve = (; τ  = 1e2,  ) # we solve for this, initial guess
-# args_other = (; ) # other args that may be needed, non differentiable
+vars       = (; ε  = 1e-15,) # input variables
+args_solve = (; τ  = 1e2,  ) # we solve for this, initial guess
+args_other = (; ) # other args that may be needed, non differentiable
 
-# vars       = (; ε  = 1e-15, λ = 0e0) # input variables
-# args_solve = (; τ  = 1e2,   λ = 0e0) # we solve for this, initial guess
-# args_other = (; ) # other args that may be needed, non differentiable
+#vars       = (; ε  = 1e-15, λ = 0e0) # input variables
+#args_solve = (; τ  = 1e2,   λ = 0e0) # we solve for this, initial guess
+#args_other = (; ) # other args that may be needed, non differentiable
 
 # composite  = viscous1, powerlaw
 # p = ParallelModel(viscous1, powerlaw)
@@ -468,26 +420,16 @@ elastic    = Elasticity(1e10, 1e12) # im making up numbers
 # args_other = (; dt = 1e10            ) # other args that may be needed, non differentiable
 
 # composite  = viscous1, powerlaw
-# p          = ParallelModel(viscous1, powerlaw)
-# c          = SeriesModel(viscous1, p, p)
+# p = ParallelModel(viscous1, powerlaw)
+# c = SeriesModel(viscous1, p, p)
 
 # vars       = (; ε  = 1e-15, θ = 1e-15) # input variables
 # args_solve = (; τ  = 1e2,   P = 1e6  ) # we solve for this, initial guess
 # args_other = (; dt = 1e10            ) # other args that may be needed, non differentiable
 
-composite  = viscous1, powerlaw
-s1         = SeriesModel(viscous1, viscous2)
-p          = ParallelModel(s1, viscous2)
-# p          = ParallelModel(s1, powerlaw)
-c          = SeriesModel(viscous1, p)
-
-vars       = (; ε  = 1e-15, θ = 1e-15) # input variables
-args_solve = (; τ  = 1e2,   P = 1e6  ) # we solve for this, initial guess
-args_other = (; dt = 1e10            ) # other args that may be needed, non differentiable
-
-fns_args   = FunctionsAndArgs(c)
-eqnum      = EquationNumbering(c)
-x          = generate_solution_vector(c, fns_args, args_solve, vars)
+fns_args = FunctionsAndArgs(c)
+eqnum    = EquationNumbering(c)
+x        = generate_solution_vector(c, fns_args, args_solve, vars)
 
 # x = SA[
 #     values(args_solve)...,
@@ -504,7 +446,7 @@ J
 
 # r_parallel = evaluate_residual_parallel(c, x, fns_args, eqnum)
     
-generate_solution_vector(c, fns_args, args_solve, vars)
+# generate_solution_vector(c, fns_args, args_solve, vars)
 
 #generate_solution_vector_($(c, fns_args, args_solve, vars)...)
 #@code_warntype generate_solution_vector_(c, fns_args, args_solve, vars)
