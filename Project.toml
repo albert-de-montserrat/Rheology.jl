@@ -5,10 +5,12 @@ version = "0.1.0"
 
 [deps]
 DifferentiationInterface = "a0c0ee7d-e4b9-4e03-894e-1c5f64a51d63"
+DispatchDoctor = "8d63f2c5-f18a-4cf2-ba9d-b3f60fc568c8"
 ForwardDiff = "f6369f11-7733-5829-9624-2563aa707210"
 StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
 
 [compat]
 DifferentiationInterface = "0.6.40"
+DispatchDoctor = "0.4.19"
 ForwardDiff = "0.10.38"
 StaticArrays = "1.9.10"
