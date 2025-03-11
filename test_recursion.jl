@@ -67,9 +67,28 @@ end
     @test parallel_numbering(c4) == ((1, ((2,), (3,))),)
 end
 
-@testset "Parallel functions mapping" begin
-    @test parallel_functions_numbering(c1) == ((1, compute_strain_rate),)
-    @test parallel_functions_numbering(c2) == ((1, compute_strain_rate), (2, compute_strain_rate))
-    @test parallel_functions_numbering(c3) == ((1, compute_strain_rate), (2, compute_strain_rate), (3, compute_strain_rate), (4, compute_strain_rate))
-    @test parallel_functions_numbering(c4) == ((1, compute_strain_rate), (2, compute_strain_rate), (3, compute_strain_rate))
+@testset "Functions mapping" begin
+    # global functions for the series elements
+    @test global_functions_numbering(c1)   == (GlobalSeriesEquation{1, typeof(compute_strain_rate)}(1, (2,), compute_strain_rate),)
+    @test global_functions_numbering(c2)   == (GlobalSeriesEquation{1, typeof(compute_strain_rate)}(1, (2,), compute_strain_rate),)
+    @test global_functions_numbering(c3)   == (GlobalSeriesEquation{2, typeof(compute_strain_rate)}(1, (3, 4), compute_strain_rate),)
+    @test global_functions_numbering(c4)   == (GlobalSeriesEquation{1, typeof(compute_strain_rate)}(1, (2,), compute_strain_rate),)
+
+    # mappings of the global functions of the parallel elements
+    @test parallel_functions_numbering(c1) == (LocalParallelEquation{typeof(compute_strain_rate)}(1, compute_strain_rate),)
+    @test parallel_functions_numbering(c2) == (
+        LocalParallelEquation{typeof(compute_strain_rate)}(1, compute_strain_rate),
+        LocalParallelEquation{typeof(compute_strain_rate)}(2, compute_strain_rate)
+    )
+    @test parallel_functions_numbering(c3) == (
+        LocalParallelEquation{typeof(compute_strain_rate)}(1, compute_strain_rate),
+        LocalParallelEquation{typeof(compute_strain_rate)}(2, compute_strain_rate), 
+        LocalParallelEquation{typeof(compute_strain_rate)}(3, compute_strain_rate), 
+        LocalParallelEquation{typeof(compute_strain_rate)}(4, compute_strain_rate)
+    )
+    @test parallel_functions_numbering(c4) ==(
+        LocalParallelEquation{typeof(compute_strain_rate)}(1, compute_strain_rate),
+        LocalParallelEquation{typeof(compute_strain_rate)}(2, compute_strain_rate),
+        LocalParallelEquation{typeof(compute_strain_rate)}(3, compute_strain_rate)
+    )
 end
