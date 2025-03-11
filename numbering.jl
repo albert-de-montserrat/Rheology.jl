@@ -22,17 +22,17 @@ Given a `SeriesModel` object `c`, this function generates a tuple of pairs where
 """
 function parallel_functions_numbering(c::SeriesModel)
     # get all the global functions of the series element
-    fns_series = global_series_state_functions(c)
+    fns_series              = global_series_state_functions(c)
     # templeate for the numbering of the parallel elements global equations
     eqnum_parallel_template = parallel_numbering(c) |> superflatten
     # offset in case there are more than one global functions to solve for
-    offset = length(eqnum_parallel_template) 
+    offset                  = length(eqnum_parallel_template) 
     # generate pairs between global parallel equations and their related solution vector element
     ntuple(Val(length(fns_series))) do i
         @inline
         ntuple(Val(length(eqnum_parallel_template))) do j
             @inline
-            LocalParallelEquation(eqnum_parallel_template[j] + offset * (i-1), fns_series[i])
+            LocalParallelEquation(eqnum_parallel_template[j] + offset * (i - 1), fns_series[i])
         end
     end |> flatten
 end
@@ -46,18 +46,36 @@ Assigns a global numbering to the functions within a `SeriesModel` object.
 - `c::SeriesModel`: The `SeriesModel` object whose functions will be numbered.
 """
 function global_functions_numbering(c::SeriesModel)
-    # get all the global functions of the series element
-    fns_series     = global_series_state_functions(c)
-    ns             = length(fns_series)
-    eqnum_parallel = parallel_numbering(c)
-    np             = length(eqnum_parallel)
-    offset_global  = np
+    # get all the global functions of the series elements
+    fns_series       = global_series_state_functions(c)
+    ns               = length(fns_series)
 
-    # generate paris between global parallel equations and their related solution vector element
+    # get all the local functions of the series elements
+    fns_series_local = local_series_functions(c)
+    ns_local         = length(fns_series_local)
+
+    # parallel equations related to this global function
+    nleafs = length(c.leafs)
+    inds_to_local = ntuple(Val(nleafs)) do j
+        j ≤ ns_local ? (j + ns,) : ()
+    end
+
+    # parallel equations numbering
+    eqnum_parallel   = parallel_numbering(c)
+    np               = length(eqnum_parallel)
+
+    # equations offsets
+    offset_parallel    = np
+
+    # generate pairs between global parallel equations and their related solution vector element
     ntuple(Val(length(fns_series))) do i
         @inline
-        inds_to_parallel = ntuple(j -> j - 1 + i + offset_global + ns * (i-1), Val(np))
-        GlobalSeriesEquation(i, inds_to_parallel, fns_series[i])
+        # parallel equations related to this global function
+        inds_to_parallel = ntuple(Val(np)) do j
+            j - 1 + i + offset_parallel + ns_local + ns * (i - 1)
+        end
+        inds_to_all_local = (inds_to_local[i]..., inds_to_parallel...)
+        GlobalSeriesEquation(i, inds_to_all_local, fns_series[i])
     end 
 end
 
@@ -77,6 +95,15 @@ c1 = let
     s1 = SeriesModel(viscous1, viscous2)
     p  = ParallelModel(s1, viscous2)
     SeriesModel(viscous1, p)
+end
+
+c = c12 = let
+    # powerlaw -- parallel
+    #               |  
+    #      viscous --- viscous  
+    s1 = SeriesModel(viscous1, viscous2)
+    p  = ParallelModel(s1, viscous2)
+    SeriesModel(viscous1, powerlaw, p)
 end
 
 c2 = let

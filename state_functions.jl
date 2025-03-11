@@ -30,3 +30,11 @@ end
 @inline series_state_functions(c::NTuple{N, ParallelModel}) where {N} = series_state_functions(first(c))..., series_state_functions(Base.tail(c))...
 @inline series_state_functions(::Tuple{})                             = ()
 # @inline series_state_functions(c::ParallelModel)                      = flatten_repeated_functions(parallel_state_functions(c.leafs))
+
+function local_series_state_functions(c::SeriesModel)
+    fns_series = global_series_state_functions(c)
+    local_series_state_functions(fns_series)
+end
+
+@inline global_series_functions(c::SeriesModel) = series_state_functions(c.leafs) |> flatten_repeated_functions |> global_series_state_functions
+@inline local_series_functions(c::SeriesModel)  = series_state_functions(c.leafs) |> flatten_repeated_functions |> local_series_state_functions
