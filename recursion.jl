@@ -84,7 +84,7 @@ The numbering starts from the value of `counter` and increments for each element
 - `counter::Base.RefValue{Int64}`: A reference to an integer that keeps track of the current number. 
   Defaults to `Ref(0)`.
 """
-@stable function parallel_numbering(c::Union{ParallelModel,SeriesModel}; counter::Base.RefValue{Int64} = Ref(0))
+function parallel_numbering(c::Union{ParallelModel,SeriesModel}; counter::Base.RefValue{Int64} = Ref(0))
     (; branches) = c
 
     np = length(branches)
@@ -98,14 +98,14 @@ The numbering starts from the value of `counter` and increments for each element
             @inline 
             parallel_numbering(inner_branches[i]; counter = counter)
         end 
-        c0, x...
+        # c0, x...
+        c0
     end
     numbering
 end
 
 #@inline @stable parallel_numbering(::Union{Tuple{}, ParallelModel}; counter::Base.RefValue{Int64} = Ref(0)) = ()
-@inline @stable parallel_numbering(::Tuple{}; counter::Base.RefValue{Int64} = Ref(0)) = ()
-
+@inline parallel_numbering(::Tuple{}; counter::Base.RefValue{Int64} = Ref(0)) = ()
 
 @stable function series_numbering(c::ParallelModel; counter::Base.RefValue{Int64} = Ref(0))
     (; branches) = c
