@@ -1,8 +1,8 @@
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.10.3"
+julia_version = "1.11.3"
 manifest_format = "2.0"
-project_hash = "02ab266b4e4055fef12cd94358701dcbf792078f"
+project_hash = "3f8d9a361082565f7c1b66465aed8f0c4fcc3374"
 
 [[deps.ADTypes]]
 git-tree-sha1 = "fb97701c117c8162e84dfcf80215caa904aef44f"
@@ -21,9 +21,11 @@ version = "1.13.0"
 
 [[deps.Artifacts]]
 uuid = "56f22d72-fd6d-98f1-02f0-08ddc0907c33"
+version = "1.11.0"
 
 [[deps.Base64]]
 uuid = "2a0f44e3-6c83-55bd-87e4-b1978d98bd5f"
+version = "1.11.0"
 
 [[deps.CommonSubexpressions]]
 deps = ["MacroTools"]
@@ -39,6 +41,7 @@ version = "1.1.1+0"
 [[deps.Dates]]
 deps = ["Printf"]
 uuid = "ade2ca70-3891-5945-98fb-dc099432e06a"
+version = "1.11.0"
 
 [[deps.DiffResults]]
 deps = ["StaticArraysCore"]
@@ -98,6 +101,20 @@ version = "0.6.40"
     Tracker = "9f7883ad-71c0-57eb-9f7f-b5c9e6d3789c"
     Zygote = "e88e6eb3-aa80-5325-afca-941959d7151f"
 
+[[deps.DispatchDoctor]]
+deps = ["MacroTools", "Preferences"]
+git-tree-sha1 = "f311fe66bfe4e38b2f1c8d1081f06920092b57aa"
+uuid = "8d63f2c5-f18a-4cf2-ba9d-b3f60fc568c8"
+version = "0.4.19"
+
+    [deps.DispatchDoctor.extensions]
+    DispatchDoctorChainRulesCoreExt = "ChainRulesCore"
+    DispatchDoctorEnzymeCoreExt = "EnzymeCore"
+
+    [deps.DispatchDoctor.weakdeps]
+    ChainRulesCore = "d360d2e6-b24c-11e9-a2a3-2a2ae2dbcce4"
+    EnzymeCore = "f151be2c-9106-41f4-ab19-57ee4f262869"
+
 [[deps.DocStringExtensions]]
 deps = ["LibGit2"]
 git-tree-sha1 = "2fb1e02f2b635d0845df5d7c167fec4dd739b00d"
@@ -128,11 +145,12 @@ version = "1.7.0"
 [[deps.LibGit2]]
 deps = ["Base64", "LibGit2_jll", "NetworkOptions", "Printf", "SHA"]
 uuid = "76f85450-5226-5b5a-8eaa-529ad045b433"
+version = "1.11.0"
 
 [[deps.LibGit2_jll]]
 deps = ["Artifacts", "LibSSH2_jll", "Libdl", "MbedTLS_jll"]
 uuid = "e37daf67-58a4-590a-8e99-b0245dd2ffc5"
-version = "1.6.4+0"
+version = "1.7.2+0"
 
 [[deps.LibSSH2_jll]]
 deps = ["Artifacts", "Libdl", "MbedTLS_jll"]
@@ -141,10 +159,12 @@ version = "1.11.0+1"
 
 [[deps.Libdl]]
 uuid = "8f399da3-3557-5675-b5ff-fb832c97cbdb"
+version = "1.11.0"
 
 [[deps.LinearAlgebra]]
 deps = ["Libdl", "OpenBLAS_jll", "libblastrampoline_jll"]
 uuid = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
+version = "1.11.0"
 
 [[deps.LogExpFunctions]]
 deps = ["DocStringExtensions", "IrrationalConstants", "LinearAlgebra"]
@@ -170,7 +190,7 @@ version = "0.5.15"
 [[deps.MbedTLS_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "c8ffd9c3-330d-5841-b78e-0817d7145fa1"
-version = "2.28.2+1"
+version = "2.28.6+0"
 
 [[deps.NaNMath]]
 deps = ["OpenLibm_jll"]
@@ -185,7 +205,7 @@ version = "1.2.0"
 [[deps.OpenBLAS_jll]]
 deps = ["Artifacts", "CompilerSupportLibraries_jll", "Libdl"]
 uuid = "4536629a-c528-5b80-bd46-f80d51c5b363"
-version = "0.3.23+4"
+version = "0.3.27+1"
 
 [[deps.OpenLibm_jll]]
 deps = ["Artifacts", "Libdl"]
@@ -213,10 +233,12 @@ version = "1.4.3"
 [[deps.Printf]]
 deps = ["Unicode"]
 uuid = "de0858da-6303-5e67-8744-51eddeeeb8d7"
+version = "1.11.0"
 
 [[deps.Random]]
 deps = ["SHA"]
 uuid = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
+version = "1.11.0"
 
 [[deps.SHA]]
 uuid = "ea8e919c-243c-51af-8825-aaa63cd721ce"
@@ -260,8 +282,9 @@ version = "1.0.3"
 
 [[deps.Unicode]]
 uuid = "4ec0a83e-493e-50e2-b9ac-8f72acf5a8f5"
+version = "1.11.0"
 
 [[deps.libblastrampoline_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "8e850b90-86db-534c-a0d3-1478176c7d93"
-version = "5.8.0+1"
+version = "5.11.0+0"

@@ -1,5 +1,6 @@
 using Test
 using DispatchDoctor: @stable
+using StaticArrays
 
 import Base.IteratorsMD.flatten
 abstract type AbstractRheology end
@@ -46,6 +47,29 @@ end
 
 Base.show(io::IO, ::ParallelModel) = print(io, "ParallelModel")
 
+@inline series_leafs(c::NTuple{N, AbstractRheology}) where N = c
+@inline series_leafs(c::AbstractRheology) = (c,)
+@inline series_leafs(::ParallelModel) = ()
+@inline series_leafs(::Tuple{}) = ()
+@inline series_leafs(c::NTuple{N, Any}) where N = series_leafs(first(c))..., series_leafs(Base.tail(c))...
+
+@inline parallel_leafs(c::NTuple{N, AbstractRheology}) where N = c
+@inline parallel_leafs(c::AbstractRheology) = (c,)
+@inline parallel_leafs(::SeriesModel) = ()
+@inline parallel_leafs(::Tuple{}) = ()
+@inline parallel_leafs(c::NTuple{N, Any}) where N = parallel_leafs(first(c))..., parallel_leafs(Base.tail(c))...
+
+@inline series_branches(::NTuple{N, AbstractRheology}) where N = ()
+@inline series_branches(::AbstractRheology) = ()
+@inline series_branches(c::ParallelModel) = (c,)
+@inline series_branches(::Tuple{}) = ()
+@inline series_branches(c::NTuple{N, Any}) where N = series_branches(first(c))..., series_branches(Base.tail(c))...
+
+@inline parallel_branches(::NTuple{N, AbstractRheology}) where N = ()
+@inline parallel_branches(::AbstractRheology) = ()
+@inline parallel_branches(c::SeriesModel) = (c,)
+@inline parallel_branches(::Tuple{}) = ()
+@inline parallel_branches(c::NTuple{N, Any}) where N = parallel_branches(first(c))..., parallel_branches(Base.tail(c))...
 ################ START RECURSIVE FUNCTIONS AND TESTING
 
 """
@@ -64,15 +88,14 @@ The numbering starts from the value of `counter` and increments for each element
 
     np = length(branches)
 
+    # NOTE: counter[] is mutated "globally" within the recursion stack
     numbering = ntuple(Val(np)) do j
         @inline 
         c0 = counter[] += 1
         inner_branches = branches[j].branches
         x = ntuple(Val(length(inner_branches))) do i 
             @inline 
-            s = parallel_numbering(inner_branches[i]; counter = counter)
-            counter[] += 1
-            s
+            parallel_numbering(inner_branches[i]; counter = counter)
         end 
         c0, x...
     end
@@ -110,5 +133,21 @@ c3 = let
     SeriesModel(viscous1, p)
 end
 
+c3 = let
+    p1  = ParallelModel(viscous1, viscous2)
+    s1 = SeriesModel(p1, viscous2)
+    p  = ParallelModel(s1, viscous2)
+    SeriesModel(viscous1, p, p)
+end
+
+c4 = let
+    p1  = ParallelModel(viscous1, viscous2)
+    s1 = SeriesModel(p1, p1)
+    p  = ParallelModel(s1, viscous2)
+    SeriesModel(viscous1, p)
+end
+
 @test parallel_numbering(c1) == ((1, ()),)
 @test parallel_numbering(c2) == ((1, ((2,),)),)
+@test parallel_numbering(c3) == ((1, ((2,),)), (3, ((4,),)))
+@test parallel_numbering(c4) == ((1, ((2,), (3,))),)
