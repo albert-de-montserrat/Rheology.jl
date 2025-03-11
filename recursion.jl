@@ -14,6 +14,7 @@ include("src/kwargs.jl")
 # include("../src/matrices.jl")
 include("albert/others.jl")
 include("albert/residual.jl")
+include("albert/composite.jl")
 
 ################ BASIC STRUCTS
 
@@ -83,7 +84,7 @@ The numbering starts from the value of `counter` and increments for each element
 - `counter::Base.RefValue{Int64}`: A reference to an integer that keeps track of the current number. 
   Defaults to `Ref(0)`.
 """
-@stable function parallel_numbering(c::SeriesModel; counter::Base.RefValue{Int64} = Ref(0))
+@stable function parallel_numbering(c::Union{ParallelModel,SeriesModel}; counter::Base.RefValue{Int64} = Ref(0))
     (; branches) = c
 
     np = length(branches)
@@ -102,7 +103,53 @@ The numbering starts from the value of `counter` and increments for each element
     numbering
 end
 
-@inline @stable parallel_numbering(::Union{Tuple{}, ParallelModel}; counter::Base.RefValue{Int64} = Ref(0)) = ()
+#@inline @stable parallel_numbering(::Union{Tuple{}, ParallelModel}; counter::Base.RefValue{Int64} = Ref(0)) = ()
+@inline @stable parallel_numbering(::Tuple{}; counter::Base.RefValue{Int64} = Ref(0)) = ()
+
+
+@stable function series_numbering(c::ParallelModel; counter::Base.RefValue{Int64} = Ref(0))
+    (; branches) = c
+
+    np = length(branches)
+
+    numbering = ntuple(Val(np)) do j
+        @inline 
+        c0 = counter[] += 1
+        inner_branches = branches[j].branches
+        x = ntuple(Val(length(inner_branches))) do i 
+            @inline 
+            s = series_numbering(inner_branches[i]; counter = counter)
+            counter[] += 1
+            s
+        end 
+        c0, x...
+    end
+    numbering
+end
+
+@stable function series_numbering(c::SeriesModel; counter::Base.RefValue{Int64} = Ref(0))
+    (; branches) = c
+
+    np = length(branches)
+
+    numbering = ntuple(Val(np)) do j
+        @inline 
+        c0 = counter[] += 1
+        inner_branches = branches[j].branches
+        x = ntuple(Val(length(inner_branches))) do i 
+            @inline 
+            s = series_numbering(inner_branches[i]; counter = counter)
+            counter[] += 1
+            s
+        end 
+        (c0,), x...
+    end
+    numbering
+end
+
+@inline @stable series_numbering(::Tuple{};     counter::Base.RefValue{Int64} = Ref(0)) = ()
+#@inline @stable series_numbering(::SeriesModel; counter::Base.RefValue{Int64} = Ref(0)) = counter
+
 
 # testing grounds
 
@@ -115,8 +162,9 @@ elastic    = Elasticity(1e10, 1e12)
 composite  = viscous1, powerlaw
 c1 = let
     s1 = SeriesModel(viscous1, viscous2)
+    s2 = SeriesModel(viscous1, viscous2)
     p  = ParallelModel(s1, viscous2)
-    SeriesModel(viscous1, p)
+    SeriesModel(viscous1, drucker, p)
 end
 
 c2 = let
