@@ -27,7 +27,7 @@ Given a `SeriesModel` object `c`, this function generates a tuple of pairs where
 """
 function parallel_functions_numbering(c::SeriesModel)
     # get all the global functions of the series element
-    fns_series              = global_series_state_functions(c)
+    fns_series              = global_series_state_functions(c) |> correct_fns_series
     # templeate for the numbering of the parallel elements global equations
     eqnum_parallel_template = parallel_numbering(c) |> superflatten
     # offset in case there are more than one global functions to solve for
@@ -42,6 +42,17 @@ function parallel_functions_numbering(c::SeriesModel)
     end |> flatten
 end
 
+correct_fns_series(::Tuple{}) = (compute_strain_rate,)
+correct_fns_series(x)         = x
+
+function local_indicies(::Val{nleafs}, ::Val{ns}, ::Val{ns_local}) where {nleafs, ns, ns_local} 
+    ntuple(Val(nleafs)) do j
+        j ≤ ns_local ? (j + ns,) : ()
+    end
+end
+
+local_indicies(::Val{0}, ::Val{ns}, ::Val{ns_local}) where {ns, ns_local} = tuple(())
+
 """
     global_functions_numbering(c::SeriesModel)
 
@@ -52,7 +63,7 @@ Assigns a global numbering to the functions within a `SeriesModel` object.
 """
 function global_functions_numbering(c::SeriesModel)
     # get all the global functions of the series elements
-    fns_series       = global_series_state_functions(c) |> flatten_repeated_functions
+    fns_series       = global_series_state_functions(c) |> flatten_repeated_functions |> correct_fns_series
     ns               = length(fns_series)
 
     # get all the local functions of the series elements
@@ -60,10 +71,8 @@ function global_functions_numbering(c::SeriesModel)
     ns_local         = length(fns_series_local)
 
     # local functions related to the global functions
-    nleafs = length(c.leafs)
-    inds_to_local = ntuple(Val(nleafs)) do j
-        j ≤ ns_local ? (j + ns,) : ()
-    end
+    nleafs                = length(c.leafs)
+    inds_to_local         = local_indicies(Val(nleafs), Val(ns), Val(ns_local))
 
     # parallel equations numbering
     eqnum_parallel        = parallel_numbering(c)
@@ -86,7 +95,7 @@ function global_functions_numbering(c::SeriesModel)
         # @show inds_to_parallel
         inds_to_all_local = (inds_to_local[i]..., inds_to_parallel...)
         GlobalSeriesEquation(i, inds_to_all_local, fns_series[i])
-    end 
+    end
 end
 
 # testing grounds
@@ -152,7 +161,11 @@ end
 c5 = let
     # viscous -- powerlaw -- parallel
     #                           |  
-    #                  viscous --- viscous  
+    #                 parallel --- viscous
+    #                    |
+    #                 viscous
+    #                    |
+    #                 viscous
     s1 = SeriesModel(viscous1, viscous2)
     p  = ParallelModel(s1, viscous2)
     SeriesModel(viscous1, powerlaw, p)
@@ -161,11 +174,44 @@ end
 c6 = let
     # viscous -- elastic -- parallel
     #                          |  
-    #                 viscous --- viscous  
+    #                parallel --- viscous  
+    #                   |
+    #                viscous
+    #                   |
+    #                viscous
     s1 = SeriesModel(viscous1, viscous2)
     p  = ParallelModel(s1, viscous2)
     SeriesModel(viscous1, elastic, p)
 end
+
+c7 = let
+    # viscous -- drucker -- parallel
+    #                          |  
+    #                parallel --- viscous  
+    #                   |
+    #                viscous
+    #                   |
+    #                viscous
+    s1 = SeriesModel(viscous1, viscous2)
+    p  = ParallelModel(s1, viscous2)
+    SeriesModel(viscous1, drucker, p)
+end
+
+c8 = let
+    #       parallel
+    #          |
+    # viscous --- viscous  
+    p  = ParallelModel(viscous1, viscous2)
+    SeriesModel(p)
+end
+
+# c7 = let
+#     s1 = SeriesModel(viscous1, elastic, drucker)
+#     p1  = ParallelModel(drucker, viscous1)
+#     p2  = ParallelModel(drucker, s1)
+#     s2 = SeriesModel(viscous1, p1, p2, viscous2)
+#     SeriesModel(ParallelModel(s2, viscous1))
+# end
 
 @test parallel_functions_numbering(c1) == (LocalParallelEquation{typeof(compute_strain_rate)}(1, compute_strain_rate),)
 @test parallel_functions_numbering(c2) == (
@@ -190,12 +236,15 @@ end
     LocalParallelEquation{typeof(compute_volumetric_strain_rate)}(3, compute_volumetric_strain_rate)
 )
 
+@test parallel_functions_numbering(c8) == (LocalParallelEquation{typeof(compute_strain_rate)}(1, compute_strain_rate),)
+
 @test global_functions_numbering(c1) == (GlobalSeriesEquation{1, typeof(compute_strain_rate)}(1, (2,), compute_strain_rate),)
 @test global_functions_numbering(c2) == (GlobalSeriesEquation{1, typeof(compute_strain_rate)}(1, (2,), compute_strain_rate),)
 @test global_functions_numbering(c3) == (GlobalSeriesEquation{2, typeof(compute_strain_rate)}(1, (2, 4), compute_strain_rate),)
 @test global_functions_numbering(c4) == (GlobalSeriesEquation{1, typeof(compute_strain_rate)}(1, (2,), compute_strain_rate),)
 @test global_functions_numbering(c5) == (GlobalSeriesEquation{2, typeof(compute_strain_rate)}(1, (2, 3), compute_strain_rate),)
-@test global_functions_numbering(c6)       == (
+@test global_functions_numbering(c6) == (
     GlobalSeriesEquation{1, typeof(compute_strain_rate)}(1, (3,), compute_strain_rate),
     GlobalSeriesEquation{1, typeof(compute_volumetric_strain_rate)}(2, (4,), compute_volumetric_strain_rate)
 )
+@test global_functions_numbering(c8) == (GlobalSeriesEquation{1, typeof(compute_strain_rate)}(1, (2,), compute_strain_rate),)
