@@ -1,5 +1,5 @@
 include("recursion.jl")
-include("recursion.jl")
+include("numbering.jl")
 include("state_functions.jl")
 
 # testing grounds for parallel_numbering
@@ -71,11 +71,11 @@ end
 
 @testset "Functions mapping" begin
     # global functions for the series elements
-    @test global_functions_numbering(c1)   == (GlobalSeriesEquation{1, typeof(compute_strain_rate)}(1, (2,), compute_strain_rate),)
-    @test global_functions_numbering(c2)   == (GlobalSeriesEquation{1, typeof(compute_strain_rate)}(1, (2,), compute_strain_rate),)
-    @test global_functions_numbering(c3)   == (GlobalSeriesEquation{2, typeof(compute_strain_rate)}(1, (3, 4), compute_strain_rate),)
-    @test global_functions_numbering(c4)   == (GlobalSeriesEquation{1, typeof(compute_strain_rate)}(1, (2,), compute_strain_rate),)
-
+    @test global_functions_numbering(c1) == (GlobalSeriesEquation{1, typeof(compute_strain_rate)}(1, (2,), compute_strain_rate),)
+    @test global_functions_numbering(c2) == (GlobalSeriesEquation{1, typeof(compute_strain_rate)}(1, (2,), compute_strain_rate),)
+    @test global_functions_numbering(c3) == (GlobalSeriesEquation{2, typeof(compute_strain_rate)}(1, (3, 4), compute_strain_rate),)
+    @test global_functions_numbering(c4) == (GlobalSeriesEquation{1, typeof(compute_strain_rate)}(1, (2,), compute_strain_rate),)
+    
     # mappings of the global functions of the parallel elements
     @test parallel_functions_numbering(c1) == (LocalParallelEquation{typeof(compute_strain_rate)}(1, compute_strain_rate),)
     @test parallel_functions_numbering(c2) == (
