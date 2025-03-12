@@ -66,8 +66,11 @@ function global_functions_numbering(c::SeriesModel)
     end
 
     # parallel equations numbering
-    eqnum_parallel   = parallel_numbering(c)
-    np               = length(eqnum_parallel)
+    eqnum_parallel        = parallel_numbering(c)
+    np                    = length(eqnum_parallel) # number of parallel elements
+    # length of the parallel equations of every main
+    # parallel element, shifted one position to the right
+    offset_parallel_local = (0, ntuple(i -> length(superflatten(eqnum_parallel[1])) - 1, Val(np))...)
 
     # equations offsets
     offset_parallel  = np * ns
@@ -75,18 +78,16 @@ function global_functions_numbering(c::SeriesModel)
     # generate pairs between global parallel equations and their related solution vector element
     ntuple(Val(length(fns_series))) do i
         @inline
-        # i = 2
         # parallel equations related to this global function
         inds_to_parallel = ntuple(Val(np)) do j
-            (ns_local + ns) + np * (i - 1) + j
+            offset_parallel_local[j] + (ns_local + ns) + np * (i - 1) + j
             # j - 1 + i + offset_parallel + ns_local + ns * (i - 1)
         end
+        # @show inds_to_parallel
         inds_to_all_local = (inds_to_local[i]..., inds_to_parallel...)
         GlobalSeriesEquation(i, inds_to_all_local, fns_series[i])
     end 
 end
-# global_functions_numbering(c)
-
 
 # testing grounds
 
@@ -190,7 +191,7 @@ end
 
 @test global_functions_numbering(c1) == (GlobalSeriesEquation{1, typeof(compute_strain_rate)}(1, (2,), compute_strain_rate),)
 @test global_functions_numbering(c2) == (GlobalSeriesEquation{1, typeof(compute_strain_rate)}(1, (2,), compute_strain_rate),)
-@test global_functions_numbering(c3) == (GlobalSeriesEquation{2, typeof(compute_strain_rate)}(1, (3, 4), compute_strain_rate),)
+@test global_functions_numbering(c3) == (GlobalSeriesEquation{2, typeof(compute_strain_rate)}(1, (2, 4), compute_strain_rate),)
 @test global_functions_numbering(c4) == (GlobalSeriesEquation{1, typeof(compute_strain_rate)}(1, (2,), compute_strain_rate),)
 @test global_functions_numbering(c5) == (GlobalSeriesEquation{2, typeof(compute_strain_rate)}(1, (2, 3), compute_strain_rate),)
 @test global_functions_numbering(c6)       == (
