@@ -62,11 +62,31 @@ c4 = let
     SeriesModel(viscous1, p)
 end
 
+c5 = let
+    # viscous -- powerlaw -- parallel
+    #                           |  
+    #                  viscous --- viscous  
+    s1 = SeriesModel(viscous1, viscous2)
+    p  = ParallelModel(s1, viscous2)
+    SeriesModel(viscous1, powerlaw, p)
+end
+
+c6 = let
+    # viscous -- elastic -- parallel
+    #                          |  
+    #                 viscous --- viscous  
+    s1 = SeriesModel(viscous1, viscous2)
+    p  = ParallelModel(s1, viscous2)
+    SeriesModel(viscous1, elastic, p)
+end
+
 @testset "Parallel numbering" begin
     @test parallel_numbering(c1) == ((1, ()),)
     @test parallel_numbering(c2) == ((1, ((2,),)),)
     @test parallel_numbering(c3) == ((1, ((2,),)), (3, ((4,),)))
     @test parallel_numbering(c4) == ((1, ((2,), (3,))),)
+    @test parallel_numbering(c5) == ((1, ()),)
+    @test parallel_numbering(c6) == ((1, ()),)
 end
 
 @testset "Functions mapping" begin
@@ -75,7 +95,12 @@ end
     @test global_functions_numbering(c2) == (GlobalSeriesEquation{1, typeof(compute_strain_rate)}(1, (2,), compute_strain_rate),)
     @test global_functions_numbering(c3) == (GlobalSeriesEquation{2, typeof(compute_strain_rate)}(1, (2, 4), compute_strain_rate),)
     @test global_functions_numbering(c4) == (GlobalSeriesEquation{1, typeof(compute_strain_rate)}(1, (2,), compute_strain_rate),)
-    
+    @test global_functions_numbering(c5) == (GlobalSeriesEquation{2, typeof(compute_strain_rate)}(1, (2, 3), compute_strain_rate),)
+    @test global_functions_numbering(c6)       == (
+        GlobalSeriesEquation{1, typeof(compute_strain_rate)}(1, (3,), compute_strain_rate),
+        GlobalSeriesEquation{1, typeof(compute_volumetric_strain_rate)}(2, (4,), compute_volumetric_strain_rate)
+    )
+
     # mappings of the global functions of the parallel elements
     @test parallel_functions_numbering(c1) == (LocalParallelEquation{typeof(compute_strain_rate)}(1, compute_strain_rate),)
     @test parallel_functions_numbering(c2) == (
@@ -92,5 +117,11 @@ end
         LocalParallelEquation{typeof(compute_strain_rate)}(1, compute_strain_rate),
         LocalParallelEquation{typeof(compute_strain_rate)}(2, compute_strain_rate),
         LocalParallelEquation{typeof(compute_strain_rate)}(3, compute_strain_rate)
+    )
+    @test parallel_functions_numbering(c5) == (LocalParallelEquation{typeof(compute_strain_rate)}(1, compute_strain_rate),)
+    @test parallel_functions_numbering(c6) == (
+        LocalParallelEquation{typeof(compute_strain_rate)}(1, compute_strain_rate),
+        LocalParallelEquation{typeof(compute_strain_rate)}(2, compute_strain_rate), 
+        LocalParallelEquation{typeof(compute_volumetric_strain_rate)}(3, compute_volumetric_strain_rate)
     )
 end

@@ -168,26 +168,27 @@ c6 = let
 end
 
 @test parallel_functions_numbering(c1) == (LocalParallelEquation{typeof(compute_strain_rate)}(1, compute_strain_rate),)
-
 @test parallel_functions_numbering(c2) == (
     LocalParallelEquation{typeof(compute_strain_rate)}(1, compute_strain_rate),
     LocalParallelEquation{typeof(compute_strain_rate)}(2, compute_strain_rate)
 )
-
 @test parallel_functions_numbering(c3) == (
     LocalParallelEquation{typeof(compute_strain_rate)}(1, compute_strain_rate),
     LocalParallelEquation{typeof(compute_strain_rate)}(2, compute_strain_rate), 
     LocalParallelEquation{typeof(compute_strain_rate)}(3, compute_strain_rate), 
     LocalParallelEquation{typeof(compute_strain_rate)}(4, compute_strain_rate)
 )
-
 @test parallel_functions_numbering(c4) ==(
     LocalParallelEquation{typeof(compute_strain_rate)}(1, compute_strain_rate),
     LocalParallelEquation{typeof(compute_strain_rate)}(2, compute_strain_rate),
     LocalParallelEquation{typeof(compute_strain_rate)}(3, compute_strain_rate)
 )
-
 @test parallel_functions_numbering(c5) == (LocalParallelEquation{typeof(compute_strain_rate)}(1, compute_strain_rate),)
+@test parallel_functions_numbering(c6) == (
+    LocalParallelEquation{typeof(compute_strain_rate)}(1, compute_strain_rate),
+    LocalParallelEquation{typeof(compute_strain_rate)}(2, compute_strain_rate), 
+    LocalParallelEquation{typeof(compute_volumetric_strain_rate)}(3, compute_volumetric_strain_rate)
+)
 
 @test global_functions_numbering(c1) == (GlobalSeriesEquation{1, typeof(compute_strain_rate)}(1, (2,), compute_strain_rate),)
 @test global_functions_numbering(c2) == (GlobalSeriesEquation{1, typeof(compute_strain_rate)}(1, (2,), compute_strain_rate),)
