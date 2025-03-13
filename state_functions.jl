@@ -38,3 +38,45 @@ end
 
 @inline global_series_functions(c::SeriesModel) = series_state_functions(c.leafs) |> flatten_repeated_functions |> global_series_state_functions
 @inline local_series_functions(c::SeriesModel)  = series_state_functions(c.leafs) |> flatten_repeated_functions |> local_series_state_functions
+
+
+### 
+
+function parallel_state_functions(c::SeriesModel)
+    (; branches) = c
+    ntuple(Val(length(branches))) do i
+        parallel_state_functions(branches[i])
+    end
+end
+
+@inline function parallel_state_functions(c::ParallelModel)
+    (; leafs, branches) = c
+
+    nl = length(leafs)
+    fns_leafs = ntuple(Val(nl)) do i
+        parallel_state_functions(leafs[i])
+    end |> flatten_repeated_functions
+
+    nb = length(branches)
+    fns_branches = ntuple(Val(nb)) do i
+        series_state_functions(branches[i])
+    end # |> flatten_repeated_functions
+    fns_leafs..., fns_branches...
+end
+
+@inline function series_state_functions(c::SeriesModel)
+    (; leafs, branches) = c
+
+    nl = length(leafs)
+    fns_leafs = ntuple(Val(nl)) do i
+        series_state_functions(leafs[i])
+    end |> flatten_repeated_functions
+
+    nb = length(branches)
+    fns_branches = ntuple(Val(nb)) do i
+        parallel_state_functions(branches[i])
+    end #|> flatten_repeated_functions
+    fns_leafs..., fns_branches...
+end
+
+
