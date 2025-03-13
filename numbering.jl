@@ -57,6 +57,8 @@ function parallel_functions_numbering(c::SeriesModel)
     end |> flatten
 end
 
+parallel_functions_numbering(c3)
+
 @inline correct_fns_series(::Tuple{}) = (compute_strain_rate,)
 @inline correct_fns_series(x)         = x
 
@@ -112,3 +114,6 @@ function global_functions_numbering(c::SeriesModel)
         GlobalSeriesEquation(i, inds_to_all_local, fns_series[i])
     end
 end
+
+
+global_functions_numbering(c3)
