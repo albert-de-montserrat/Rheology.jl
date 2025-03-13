@@ -86,24 +86,25 @@ The numbering starts from the value of `counter` and increments for each element
 """
 @inline function parallel_numbering(c::Union{ParallelModel,SeriesModel}; counter::Base.RefValue{Int64} = Ref(0))
     (; branches) = c
-
     np = length(branches)
 
     # NOTE: counter[] is mutated "globally" within the recursion stack
     numbering = ntuple(Val(np)) do j
         @inline 
-        c0 = counter[] += 1
-        inner_branches = branches[j].branches
-        x = ntuple(Val(length(inner_branches))) do i 
+        c1 = counter[] += 1
+        inner_branches  = branches[j].branches
+        nb              = length(inner_branches)
+        x = ntuple(Val(nb)) do i 
             @inline 
-            parallel_numbering(inner_branches[i]; counter = counter)
-        end 
-        c0, x...
+            c2 = counter[] += 1
+            c3 = parallel_numbering(inner_branches[i]; counter = counter)
+            c2, c3...
+        end
+        c1, x...
     end
     numbering
 end
 
-#@inline @stable parallel_numbering(::Union{Tuple{}, ParallelModel}; counter::Base.RefValue{Int64} = Ref(0)) = ()
 @inline parallel_numbering(::Tuple{}; counter::Base.RefValue{Int64} = Ref(0)) = ()
 
 @stable function series_numbering(c::ParallelModel; counter::Base.RefValue{Int64} = Ref(0))
@@ -147,54 +148,3 @@ end
 end
 
 @inline @stable series_numbering(::Tuple{};     counter::Base.RefValue{Int64} = Ref(0)) = ()
-#@inline @stable series_numbering(::SeriesModel; counter::Base.RefValue{Int64} = Ref(0)) = counter
-
-
-# testing grounds
-
-viscous1   = LinearViscosity(5e19)
-viscous2   = LinearViscosity(1e20)
-powerlaw   = PowerLawViscosity(5e19, 3)
-drucker    = DruckerPrager(1e6, 10.0, 0.0)
-elastic    = Elasticity(1e10, 1e12)
-
-composite  = viscous1, powerlaw
-c1 = let
-    s1 = SeriesModel(viscous1, viscous2)
-    s2 = SeriesModel(viscous1, viscous2)
-    p  = ParallelModel(s1, viscous2)
-    SeriesModel(viscous1, drucker, p)
-end
-
-c2 = let
-    p1  = ParallelModel(viscous1, viscous2)
-    s1 = SeriesModel(p1, viscous2)
-    p  = ParallelModel(s1, viscous2)
-    SeriesModel(viscous1, p)
-end
-
-c3 = let
-    p1  = ParallelModel(viscous1, viscous2)
-    s1 = SeriesModel(p1, viscous2)
-    p  = ParallelModel(s1, viscous2)
-    SeriesModel(viscous1, p)
-end
-
-c3 = let
-    p1  = ParallelModel(viscous1, viscous2)
-    s1 = SeriesModel(p1, viscous2)
-    p  = ParallelModel(s1, viscous2)
-    SeriesModel(viscous1, p, p)
-end
-
-c4 = let
-    p1  = ParallelModel(viscous1, viscous2)
-    s1 = SeriesModel(p1, p1)
-    p  = ParallelModel(s1, viscous2)
-    SeriesModel(viscous1, p)
-end
-
-@test parallel_numbering(c1) == ((1, ()),)
-@test parallel_numbering(c2) == ((1, ((2,),)),)
-@test parallel_numbering(c3) == ((1, ((2,),)), (3, ((4,),)))
-@test parallel_numbering(c4) == ((1, ((2,), (3,))),)

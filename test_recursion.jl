@@ -50,11 +50,11 @@ end
 c3 = let
     # viscous -- parallel ------------- parallel
     #               |                       |
-    #     parallel --- viscous    parallel --- viscous
-    #         |                     |  
-    #      viscous               viscous
-    #         |                     |  
-    #      viscous               viscous
+    #      parallel --- viscous   parallel --- viscous
+    #         |                      |  
+    #      viscous                viscous
+    #         |                      |  
+    #      viscous                viscous
     p1 = ParallelModel(viscous1, viscous2)
     s1 = SeriesModel(p1, viscous2)
     p  = ParallelModel(s1, viscous2)
@@ -124,12 +124,13 @@ end
 
 @testset "Parallel numbering" begin
     @test parallel_numbering(c0) == ((1, ),)
-    @test parallel_numbering(c1) == ((1, ()),)
-    @test parallel_numbering(c2) == ((1, ((2,),)),)
-    @test parallel_numbering(c3) == ((1, ((2,),)), (3, ((4,),)))
-    @test parallel_numbering(c4) == ((1, ((2,), (3,))),)
-    @test parallel_numbering(c5) == ((1, ()),)
-    @test parallel_numbering(c7) == ((1, ()),)
+    @test parallel_numbering(c1) == ((1, (2, )),)
+    @test parallel_numbering(c2) == ((1, (2, (3,))),)
+    @test parallel_numbering(c3) == ((1, (2, (3,))), (4, (5, (6,)))) 
+    @test parallel_numbering(c4) == ((1, (2, (3,), (4,))),)
+    @test parallel_numbering(c5) == ((1, (2,)),)
+    @test parallel_numbering(c6) == ((1, (2,)),)
+    @test parallel_numbering(c7) == ((1, (2,)),)
 end
 
 @testset "Parallel functions" begin
@@ -155,11 +156,11 @@ end
 
 @testset "Functions mapping" begin
     # global functions for the series elements
-    @test global_functions_numbering(c0) == (GlobalSeriesEquation{1, typeof(compute_strain_rate)}(1, (2,), compute_strain_rate),)
-    @test global_functions_numbering(c1) == (GlobalSeriesEquation{1, typeof(compute_strain_rate)}(1, (2,), compute_strain_rate),)
-    @test global_functions_numbering(c2) == (GlobalSeriesEquation{1, typeof(compute_strain_rate)}(1, (2,), compute_strain_rate),)
+    @test global_functions_numbering(c0) == (GlobalSeriesEquation{1, typeof(compute_strain_rate)}(1, (2,),   compute_strain_rate),)
+    @test global_functions_numbering(c1) == (GlobalSeriesEquation{1, typeof(compute_strain_rate)}(1, (2,),   compute_strain_rate),)
+    @test global_functions_numbering(c2) == (GlobalSeriesEquation{1, typeof(compute_strain_rate)}(1, (2,),   compute_strain_rate),)
     @test global_functions_numbering(c3) == (GlobalSeriesEquation{2, typeof(compute_strain_rate)}(1, (2, 4), compute_strain_rate),)
-    @test global_functions_numbering(c4) == (GlobalSeriesEquation{1, typeof(compute_strain_rate)}(1, (2,), compute_strain_rate),)
+    @test global_functions_numbering(c4) == (GlobalSeriesEquation{1, typeof(compute_strain_rate)}(1, (2,),   compute_strain_rate),)
     @test global_functions_numbering(c5) == (GlobalSeriesEquation{2, typeof(compute_strain_rate)}(1, (2, 3), compute_strain_rate),)
     @test global_functions_numbering(c6) == (
         GlobalSeriesEquation{1, typeof(compute_strain_rate)}(1, (3,), compute_strain_rate),
