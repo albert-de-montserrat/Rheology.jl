@@ -219,7 +219,7 @@ function eval_series(c::SeriesModel, x::SVector, vars::NamedTuple, args::NamedTu
         eq = eqs_series[i]
         fn = eq.fn
         
-        # eval function on leafs
+        # eval functions on the leafs
         v_series = ntuple(Val(nseries)) do j
             @inline
             fn(leafs[j], args_merged)

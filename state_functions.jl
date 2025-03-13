@@ -39,7 +39,6 @@ end
 @inline global_series_functions(c::SeriesModel) = series_state_functions(c.leafs) |> flatten_repeated_functions |> global_series_state_functions
 @inline local_series_functions(c::SeriesModel)  = series_state_functions(c.leafs) |> flatten_repeated_functions |> local_series_state_functions
 
-
 ### 
 
 function parallel_state_functions(c::SeriesModel)
