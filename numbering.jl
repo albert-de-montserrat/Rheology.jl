@@ -115,5 +115,3 @@ function global_functions_numbering(c::SeriesModel)
     end
 end
 
-
-global_functions_numbering(c3)
