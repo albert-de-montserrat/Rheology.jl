@@ -6,6 +6,19 @@ include("state_functions.jl")
 @inline superflatten(::Tuple{})                 = ()
 @inline superflatten(x)                         = (x,)
 
+struct SeriesModelEquations{T1, T2}
+    fns_series::T1
+    fns_parallel::T2
+
+    function SeriesModelEquations(c::SeriesModel)
+        fns_series   = global_functions_numbering(c)
+        fns_parallel = parallel_functions_numbering(c)
+        T1           = typeof(fns_series)
+        T2           = typeof(fns_parallel)
+        new{T1, T2}(fns_series, fns_parallel)
+    end
+end
+
 struct GlobalSeriesEquation{N, F}
     eqnum::Int64 # equation number in the solution vector
     eqnums_reduce::NTuple{N, Int64} # equation numbers of the parallel elements that needed to be added to the residual vector
@@ -99,162 +112,3 @@ function global_functions_numbering(c::SeriesModel)
         GlobalSeriesEquation(i, inds_to_all_local, fns_series[i])
     end
 end
-
-# testing grounds
-
-viscous1   = LinearViscosity(5e19)
-viscous2   = LinearViscosity(1e20)
-powerlaw   = PowerLawViscosity(5e19, 3)
-drucker    = DruckerPrager(1e6, 10.0, 0.0)
-elastic    = Elasticity(1e10, 1e12)
-
-composite  = viscous1, powerlaw
-
-c0 = let
-    # viscous -- parallel
-    #               |  
-    #      viscous --- viscous  
-    s1 = SeriesModel(viscous1, viscous2)
-    p  = ParallelModel(viscous1, viscous2)
-    SeriesModel(viscous1, p)
-end
-
-c1 = let
-    # viscous -- parallel
-    #               |  
-    #      viscous --- viscous  
-    #         |  
-    #      viscous
-    s1 = SeriesModel(viscous1, viscous2)
-    p  = ParallelModel(s1, viscous2)
-    SeriesModel(viscous1, p)
-end
-
-c2 = let
-    # viscous -- parallel
-    #               |  
-    #     parallel --- viscous
-    #         |  
-    #      viscous
-    #         |  
-    #      parallel
-    #         |  
-    # viscous - viscous
-    p1 = ParallelModel(viscous1, viscous2)
-    s1 = SeriesModel(p1, viscous2)
-    p  = ParallelModel(s1, viscous2)
-    SeriesModel(viscous1, p)
-end
-
-c3 = let
-    # viscous -- parallel ------------- parallel
-    #               |                       |
-    #     parallel --- viscous    parallel --- viscous
-    #         |                     |  
-    #      viscous               viscous
-    #         |                     |  
-    #      viscous               viscous
-    p1 = ParallelModel(viscous1, viscous2)
-    s1 = SeriesModel(p1, viscous2)
-    p  = ParallelModel(s1, viscous2)
-    SeriesModel(viscous1, p, p)
-end
-
-c4 = let
-    # viscous -- parallel
-    #               |
-    #     parallel --- parallel
-    #         |          |  
-    #      viscous    viscous
-    #         |          |  
-    #      viscous    viscous
-    p1 = ParallelModel(viscous1, viscous2)
-    s1 = SeriesModel(p1, p1)
-    p  = ParallelModel(s1, viscous2)
-    SeriesModel(viscous1, p)
-end
-
-c5 = let
-    # viscous -- powerlaw -- parallel
-    #                           |  
-    #                 parallel --- viscous
-    #                    |
-    #                 viscous
-    #                    |
-    #                 viscous
-    s1 = SeriesModel(viscous1, viscous2)
-    p  = ParallelModel(s1, viscous2)
-    SeriesModel(viscous1, powerlaw, p)
-end
-
-c6 = let
-    # viscous -- elastic -- parallel
-    #                          |  
-    #                parallel --- viscous  
-    #                   |
-    #                viscous
-    #                   |
-    #                viscous
-    s1 = SeriesModel(viscous1, viscous2)
-    p  = ParallelModel(s1, viscous2)
-    SeriesModel(viscous1, elastic, p)
-end
-
-c7 = let
-    # viscous -- drucker -- parallel
-    #                          |  
-    #                parallel --- viscous  
-    #                   |
-    #                viscous
-    #                   |
-    #                viscous
-    s1 = SeriesModel(viscous1, viscous2)
-    p  = ParallelModel(s1, viscous2)
-    SeriesModel(viscous1, drucker, p)
-end
-
-c8 = let
-    #       parallel
-    #          |
-    # viscous --- viscous  
-    p  = ParallelModel(viscous1, viscous2)
-    SeriesModel(p)
-end
-parallel_functions_numbering(c8)
-global_functions_numbering(c8)
-
-@test parallel_functions_numbering(c1) == (LocalParallelEquation{typeof(compute_strain_rate)}(1, compute_strain_rate),)
-@test parallel_functions_numbering(c2) == (
-    LocalParallelEquation{typeof(compute_strain_rate)}(1, compute_strain_rate),
-    LocalParallelEquation{typeof(compute_strain_rate)}(2, compute_strain_rate)
-)
-@test parallel_functions_numbering(c3) == (
-    LocalParallelEquation{typeof(compute_strain_rate)}(1, compute_strain_rate),
-    LocalParallelEquation{typeof(compute_strain_rate)}(2, compute_strain_rate), 
-    LocalParallelEquation{typeof(compute_strain_rate)}(3, compute_strain_rate), 
-    LocalParallelEquation{typeof(compute_strain_rate)}(4, compute_strain_rate)
-)
-@test parallel_functions_numbering(c4) ==(
-    LocalParallelEquation{typeof(compute_strain_rate)}(1, compute_strain_rate),
-    LocalParallelEquation{typeof(compute_strain_rate)}(2, compute_strain_rate),
-    LocalParallelEquation{typeof(compute_strain_rate)}(3, compute_strain_rate)
-)
-@test parallel_functions_numbering(c5) == (LocalParallelEquation{typeof(compute_strain_rate)}(1, compute_strain_rate),)
-@test parallel_functions_numbering(c6) == (
-    LocalParallelEquation{typeof(compute_strain_rate)}(1, compute_strain_rate),
-    LocalParallelEquation{typeof(compute_strain_rate)}(2, compute_strain_rate), 
-    LocalParallelEquation{typeof(compute_volumetric_strain_rate)}(3, compute_volumetric_strain_rate)
-)
-
-@test parallel_functions_numbering(c8) == (LocalParallelEquation{typeof(compute_strain_rate)}(1, compute_strain_rate),)
-
-@test global_functions_numbering(c1) == (GlobalSeriesEquation{1, typeof(compute_strain_rate)}(1, (2,), compute_strain_rate),)
-@test global_functions_numbering(c2) == (GlobalSeriesEquation{1, typeof(compute_strain_rate)}(1, (2,), compute_strain_rate),)
-@test global_functions_numbering(c3) == (GlobalSeriesEquation{2, typeof(compute_strain_rate)}(1, (2, 4), compute_strain_rate),)
-@test global_functions_numbering(c4) == (GlobalSeriesEquation{1, typeof(compute_strain_rate)}(1, (2,), compute_strain_rate),)
-@test global_functions_numbering(c5) == (GlobalSeriesEquation{2, typeof(compute_strain_rate)}(1, (2, 3), compute_strain_rate),)
-@test global_functions_numbering(c6) == (
-    GlobalSeriesEquation{1, typeof(compute_strain_rate)}(1, (3,), compute_strain_rate),
-    GlobalSeriesEquation{1, typeof(compute_volumetric_strain_rate)}(2, (4,), compute_volumetric_strain_rate)
-)
-@test global_functions_numbering(c8) == (GlobalSeriesEquation{1, typeof(compute_strain_rate)}(1, (2,), compute_strain_rate),)
