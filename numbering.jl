@@ -3,8 +3,8 @@ include("state_functions.jl")
 
 # complete flatten a tuple
 @inline superflatten(t::NTuple{N, Any}) where N = superflatten(first(t))..., superflatten(Base.tail(t))... 
-@inline superflatten(::Tuple{}) = ()
-@inline superflatten(x::Number) = (x,)
+@inline superflatten(::Tuple{})                 = ()
+@inline superflatten(x)                         = (x,)
 
 struct GlobalSeriesEquation{N, F}
     eqnum::Int64 # equation number in the solution vector
@@ -26,24 +26,26 @@ Given a `SeriesModel` object `c`, this function generates a tuple of pairs where
 - `c::SeriesModel`: The `SeriesModel` object for which the numbering and functions are to be generated.
 """
 function parallel_functions_numbering(c::SeriesModel)
-    # get all the global functions of the series element
-    fns_series              = global_series_state_functions(c) |> correct_fns_series
+    # # get all the global functions of the series element
+    # fns_series              = global_series_state_functions(c) |> correct_fns_series
+    # get all the functions of the parallel element
+    fns                     = parallel_state_functions(c) |> superflatten
     # templeate for the numbering of the parallel elements global equations
     eqnum_parallel_template = parallel_numbering(c) |> superflatten
     # offset in case there are more than one global functions to solve for
     offset                  = length(eqnum_parallel_template) 
     # generate pairs between global parallel equations and their related solution vector element
-    ntuple(Val(length(fns_series))) do i
+    ntuple(Val(length(fns))) do i
         @inline
         ntuple(Val(length(eqnum_parallel_template))) do j
             @inline
-            LocalParallelEquation(eqnum_parallel_template[j] + offset * (i - 1), fns_series[i])
+            LocalParallelEquation(eqnum_parallel_template[j] + offset * (i - 1), fns[i])
         end
     end |> flatten
 end
 
-correct_fns_series(::Tuple{}) = (compute_strain_rate,)
-correct_fns_series(x)         = x
+@inline correct_fns_series(::Tuple{}) = (compute_strain_rate,)
+@inline correct_fns_series(x)         = x
 
 function local_indicies(::Val{nleafs}, ::Val{ns}, ::Val{ns_local}) where {nleafs, ns, ns_local} 
     ntuple(Val(nleafs)) do j
@@ -107,10 +109,22 @@ drucker    = DruckerPrager(1e6, 10.0, 0.0)
 elastic    = Elasticity(1e10, 1e12)
 
 composite  = viscous1, powerlaw
+
+c0 = let
+    # viscous -- parallel
+    #               |  
+    #      viscous --- viscous  
+    s1 = SeriesModel(viscous1, viscous2)
+    p  = ParallelModel(viscous1, viscous2)
+    SeriesModel(viscous1, p)
+end
+
 c1 = let
     # viscous -- parallel
     #               |  
     #      viscous --- viscous  
+    #         |  
+    #      viscous
     s1 = SeriesModel(viscous1, viscous2)
     p  = ParallelModel(s1, viscous2)
     SeriesModel(viscous1, p)
@@ -123,7 +137,9 @@ c2 = let
     #         |  
     #      viscous
     #         |  
-    #      viscous
+    #      parallel
+    #         |  
+    # viscous - viscous
     p1 = ParallelModel(viscous1, viscous2)
     s1 = SeriesModel(p1, viscous2)
     p  = ParallelModel(s1, viscous2)
@@ -204,14 +220,8 @@ c8 = let
     p  = ParallelModel(viscous1, viscous2)
     SeriesModel(p)
 end
-
-# c7 = let
-#     s1 = SeriesModel(viscous1, elastic, drucker)
-#     p1  = ParallelModel(drucker, viscous1)
-#     p2  = ParallelModel(drucker, s1)
-#     s2 = SeriesModel(viscous1, p1, p2, viscous2)
-#     SeriesModel(ParallelModel(s2, viscous1))
-# end
+parallel_functions_numbering(c8)
+global_functions_numbering(c8)
 
 @test parallel_functions_numbering(c1) == (LocalParallelEquation{typeof(compute_strain_rate)}(1, compute_strain_rate),)
 @test parallel_functions_numbering(c2) == (
