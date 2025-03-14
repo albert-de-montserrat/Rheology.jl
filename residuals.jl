@@ -10,7 +10,6 @@ elastic    = Elasticity(1e10, 1e12)
 
 composite  = viscous1, powerlaw
 
-
 c0, x0, vars0, args0, others0 = let
     # viscous -- parallel
     #               |  
@@ -66,8 +65,7 @@ c2, x2, vars2, args2, others2 = let
     p1 = ParallelModel(viscous1, viscous2)
     s1 = SeriesModel(p1, viscous2)
     p  = ParallelModel(s1, viscous2)
-    SeriesModel(viscous1, p)
-    
+    c  = SeriesModel(viscous1, p)
     vars   = (; ε = 1e-15) # input variables (constant)
     args   = (; τ = 1e2) # guess variables (we solve for these, differentiable)
     others = (;)       # other non-differentiable variables needed to evaluate the state functions
@@ -75,6 +73,7 @@ c2, x2, vars2, args2, others2 = let
     x = SA[
         values(args)..., # global guess(es), solving for these
         values(vars)..., # local  guess(es)
+        values(args)..., # local  guess(es)
         values(vars)..., # local  guess(es)
     ]
 
@@ -89,10 +88,10 @@ c3, x3, vars3, args3, others3 = let
     #      viscous               viscous
     #         |                     |  
     #      viscous               viscous
-    p1     = ParallelModel(viscous1, viscous2)
-    s1     = SeriesModel(p1, viscous2)
-    p      = ParallelModel(s1, viscous2)
-    c      = SeriesModel(viscous1, p, p)
+    p1 = ParallelModel(viscous1, viscous2)
+    s1 = SeriesModel(p1, viscous2)
+    p  = ParallelModel(s1, viscous2)
+    c  = SeriesModel(viscous1, p, p)
     vars   = (; ε = 1e-15) # input variables (constant)
     args   = (; τ = 1e2) # guess variables (we solve for these, differentiable)
     others = (;)       # other non-differentiable variables needed to evaluate the state functions
@@ -212,14 +211,14 @@ end
 @inline differentiable_kwargs(eqs::T) where {T<:Union{GlobalSeriesEquation,LocalParallelEquation}} = differentiable_kwargs(eqs.fn)
 @inline differentiable_kwargs(::Tuple{})= ()
 
-@inline serialize(::Tuple{}) = ()
+# @inline serialize(::Tuple{}) = ()
 
 function serialize(c::AbstractCompositeModel)
     (; leafs, branches) = c
     x = ntuple(Val(length(branches))) do i
         @inline 
         serialize(branches[i])
-    end
+    end |> flatten
     leafs, x...
 end
 
@@ -279,7 +278,7 @@ function eval_parallel(c::SeriesModel, x::SVector, vars::NamedTuple, args::Named
     
     counter = Ref(0)
     ntuple(Val(np)) do k
-        cₖ = c_serial[k]
+        cₖ = c_serial[k] # |> flatten
         ntuple(Val(length(cₖ))) do i
             @inline
             I  = counter[] += 1
@@ -309,15 +308,14 @@ function eval_parallel(c::SeriesModel, x::SVector, vars::NamedTuple, args::Named
 end
 
 function eval_residual(c::SeriesModel, x::SVector, vars::NamedTuple, args::NamedTuple, others::NamedTuple)
-    # args_s      = (; τ = x[1]) 
-    # vars_p      = (; ε = x[2]) 
     r_series    =   eval_series(c, x, vars, args, others)
     r_parallel  = eval_parallel(c, x, vars, args, others)
     SA[r_series..., r_parallel...]
 end
 
 J0 = ForwardDiff.jacobian( x-> eval_residual(c0, x, vars0, args0, others0), x0)
-J1 = ForwardDiff.jacobian( x-> eval_residual(c1, x, vars1, args1, others),  x1)
+J1 = ForwardDiff.jacobian( x-> eval_residual(c1, x, vars1, args1, others1), x1)
+J2 = ForwardDiff.jacobian( x-> eval_residual(c2, x, vars2, args2, others2), x2)
 
 @test J0 == SA[
     1.0e-20  1.0
@@ -329,7 +327,8 @@ J1 = ForwardDiff.jacobian( x-> eval_residual(c1, x, vars1, args1, others),  x1)
     0.0      -1.0     1.5e-20
 ]
 
-c, x, vars, args, others = c1, x1, vars1, args1, others1
+c, x, vars, args, others = c0, x0, vars0, args0, others0
+c, x, vars, args, others = c2, x2, vars2, args2, others2
 
 eval_parallel(c0, x0, vars0, args0, others0)
 eval_parallel(c1, x1, vars1, args1, others1)
