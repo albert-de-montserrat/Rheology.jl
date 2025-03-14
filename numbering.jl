@@ -39,25 +39,25 @@ Given a `SeriesModel` object `c`, this function generates a tuple of pairs where
 - `c::SeriesModel`: The `SeriesModel` object for which the numbering and functions are to be generated.
 """
 function parallel_functions_numbering(c::SeriesModel)
-    # # get all the global functions of the series element
-    # fns_series              = global_series_state_functions(c) |> correct_fns_series
     # get all the functions of the parallel element
-    fns                     = parallel_state_functions(c) |> superflatten
+    fns                     = parallel_state_functions(c)
+    nfns                    = length(fns) # number of main parallel elements
+    # fns                     = parallel_state_functions(c) |> superflatten
     # templeate for the numbering of the parallel elements global equations
-    eqnum_parallel_template = parallel_numbering(c) |> superflatten
+    eqnum_parallel_template = parallel_numbering(c) #|> superflatten
     # offset in case there are more than one global functions to solve for
     offset                  = length(eqnum_parallel_template) 
     # generate pairs between global parallel equations and their related solution vector element
-    ntuple(Val(length(fns))) do i
+    ntuple(Val(nfns)) do i
         @inline
-        ntuple(Val(length(eqnum_parallel_template))) do j
+        fnsᵢ   = fns[i] |> superflatten
+        eqnumᵢ = eqnum_parallel_template[i] |> superflatten
+        ntuple(Val(length(eqnumᵢ))) do j
             @inline
-            LocalParallelEquation(eqnum_parallel_template[j] + offset * (i - 1), fns[i])
+            LocalParallelEquation(eqnumᵢ[j] + offset * (i - 1), fnsᵢ[j])
         end
     end |> flatten
 end
-
-parallel_functions_numbering(c3)
 
 @inline correct_fns_series(::Tuple{}) = (compute_strain_rate,)
 @inline correct_fns_series(x)         = x
@@ -114,4 +114,3 @@ function global_functions_numbering(c::SeriesModel)
         GlobalSeriesEquation(i, inds_to_all_local, fns_series[i])
     end
 end
-
