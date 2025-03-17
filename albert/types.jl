@@ -255,6 +255,19 @@ end
     end
 end
 
+for fn in (:compute_stress, :compute_pressure)
+    @eval _local_parallel_state_functions(::typeof($fn)) = ()
+end
+@inline _local_parallel_state_functions(fn::F) where F<:Function = (fn,)
+
+@generated function local_parallel_state_functions(funs::NTuple{N, Any}) where N
+    quote
+        @inline
+        f = Base.@ntuple $N i -> _local_parallel_state_functions(@inbounds(funs[i]))
+        Base.IteratorsMD.flatten(f)
+    end
+end
+
 for fun in (:compute_strain_rate, :compute_volumetric_strain_rate)
     @eval @inline _global_series_state_functions(fn::typeof($fun)) = (fn, )
 end
