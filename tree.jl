@@ -75,7 +75,7 @@ function generate_equations(c::AbstractCompositeModel; iparent = 0, iself = 0)
         get_local_functions(branches)
         CompositeEquation(iparent, iparallel_childs .+ (i - 1), iself_ref[], fns_own_global[i], leafs, Val(true))
     end 
-
+    
     # add local equations
     local_eqs = ntuple(Val(nlocal)) do i
         iself_ref[] += 1
@@ -83,11 +83,10 @@ function generate_equations(c::AbstractCompositeModel; iparent = 0, iself = 0)
     end
 
     parallel_eqs = ntuple(Val(nown)) do j
-        iparent = global_eqs[j].self
-        fn      = counterpart(fns_own_global[j])
+        iparent_new = global_eqs[j].self
+        fn          = counterpart(fns_own_global[j])
         ntuple(Val(nbranches)) do i
-            # generate_equations(branches[i]; iparent = iparent + nown + nlocal, iself = iself_ref[])
-            generate_equations(branches[i], fn; iparent = iparent, iself = iself_ref[])
+            generate_equations(branches[i], fn; iparent = iparent_new, iself = iself_ref[])
         end
     end
     
@@ -100,15 +99,16 @@ function generate_equations(c::AbstractCompositeModel, fns_own_global::F; iparen
     (; branches, leafs) = c
     
     _, fns_own_local      = get_own_functions(c)
-    fns_branches_global,_ = get_own_functions(branches)
+    # fns_branches_global,_ = get_own_functions(branches)
 
     nown             = 1 #length(fns_own_global)
     nlocal           = length(fns_own_local)
     nbranches        = length(branches)
 
-    iglobal          = ntuple(i -> iparent + i - 1, Val(nown))
+    # iglobal          = ntuple(i -> iparent + i - 1, Val(nown))
     ilocal_childs    = ntuple(i -> iparent + nown - 1 + i, Val(nlocal))
-    offsets_parallel = (0, length.(fns_branches_global)...)
+    offsets_parallel = (0, ntuple(i -> i, Val(nbranches))...)
+    # offsets_parallel = (0, length.(fns_branches_global)...)
     iparallel_childs = ntuple(i -> iparent + nlocal + offsets_parallel[i] + i + nown, Val(nbranches))
 
     # add globals
@@ -125,11 +125,10 @@ function generate_equations(c::AbstractCompositeModel, fns_own_global::F; iparen
     end
 
     parallel_eqs = ntuple(Val(nown)) do j
-        iparent = global_eqs[j].self
-        fn      = counterpart(fns_own_global)
+        iparent_new = global_eqs[j].self
+        fn          = counterpart(fns_own_global)
         ntuple(Val(nbranches)) do i
-            # generate_equations(branches[i]; iparent = iparent + nown + nlocal, iself = iself_ref[])
-            generate_equations(branches[i], fn; iparent = iparent, iself = iself_ref[])
+            generate_equations(branches[i], fn; iparent = iparent_new, iself = iself_ref[])
         end
     end
     
@@ -158,8 +157,8 @@ end
 
 @inline evaluate_state_functions(eqs::NTuple{N, CompositeEquation}, args) where N = promote(ntuple(i -> evaluate_state_function(eqs[i], args[i]), Val(N))...)
 
-@inline add_child( ::SVector{N,T}, ::Tuple{})             where {N,T} = zero(T)
-@inline add_child(x::SVector{N,T}, child::NTuple{N, Int}) where {N,T} = sum(@inbounds x[i] for i in child)
+@inline add_child( ::SVector{N,T}, ::Tuple{}) where {N,T} = zero(T)
+@inline add_child(x::SVector, child::NTuple)              = sum(@inbounds x[i] for i in child)
 
 @inline function add_children(residual::NTuple{N,T}, x::SVector{N,T}, eqs::NTuple{N, CompositeEquation}) where {N,T}
     ntuple(Val(N)) do i
@@ -167,12 +166,9 @@ end
     end
 end
  
-add_children(residual, x, eqs)
-
-
 # if global, subtract the variables
 @inline subtract_parent( ::SVector, eq::CompositeEquation{true} ,         vars) = vars[eq.self]
-@inline subtract_parent(x::SVector, eq::CompositeEquation{false}, ::NamedTuple)   = x[eq.parent]
+@inline subtract_parent(x::SVector, eq::CompositeEquation{false}, ::NamedTuple) = x[eq.parent]
 @inline subtract_parent(residual::NTuple{N,T}, x, eqs::NTuple{N, CompositeEquation}, vars) where {N,T} = ntuple(i -> residual[i] - subtract_parent(x, eqs[i], vars), Val(N))
 
 function compute_residual(c, x, vars, others)
@@ -185,6 +181,7 @@ function compute_residual(c, x, vars, others)
     residual = subtract_parent(residual, x, eqs, vars)
     SA[residual...]
 end
+@code_warntype compute_residual(c, x, vars, others)
 
 viscous1   = LinearViscosity(5e19)
 viscous2   = LinearViscosity(1e20)
@@ -253,5 +250,10 @@ c, x, vars, args, others = let
     c, x, vars, args, others
 end
 
+@code_warntype compute_residual(c, x, vars, others)
+
 compute_residual(c, x, vars, others)
+ForwardDiff.jacobian(x -> compute_residual(c, x, vars, others), x)
+
+@b compute_residual($(c, x, vars, others)...)
 ForwardDiff.jacobian(x -> compute_residual(c, x, vars, others), x)
