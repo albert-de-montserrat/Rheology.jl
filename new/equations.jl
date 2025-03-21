@@ -1,4 +1,4 @@
-include("numbering.jl")
+include("recursion.jl")
 
 struct CompositeEquation{IsGlobal, T, F, R}
     parent::Int64  # i-th element of x to be substracted
@@ -51,51 +51,6 @@ function get_local_functions(c::ParallelModel)
 end
 
 @inline generate_equations(::Tuple{}; iparent = 0) = ()
-
-# function generate_equations(c::AbstractCompositeModel; iparent::Int64 = 0, iself::Int64 = 0)
-#     iself_ref = Ref{Int64}(iself)
-
-#     (; branches, leafs) = c
-    
-#     fns_own_global, fns_own_local = get_own_functions(c)
-#     fns_branches_global,          = get_own_functions(branches)
-
-#     nown             = length(fns_own_global)
-#     nlocal           = length(fns_own_local)
-#     nbranches        = length(branches)
-
-#     # iglobal          = ntuple(i -> iparent + i - 1, Val(nown))
-#     ilocal_childs    = ntuple(i -> iparent + nown - 1 + i, Val(nlocal))
-#     offsets_parallel = (0, length.(fns_branches_global)...)
-#     iparallel_childs = ntuple(i -> iparent + nlocal + offsets_parallel[i] + i + nown, Val(nbranches))
-
-#     # add global equations
-#     global_eqs = ntuple(Val(nown)) do i
-#         @inline
-#         iself_ref[] += 1
-#         CompositeEquation(iparent, iparallel_childs .+ (i - 1), iself_ref[], fns_own_global[i], leafs, Val(true))
-#     end 
-
-    
-#     # add local equations
-#     local_eqs = ntuple(Val(nlocal)) do i
-#         @inline
-#         iself_ref[] += 1
-#         CompositeEquation(iparent, ilocal_childs[i], iself_ref[], fns_own_local[i], leafs, Val(false))
-#     end
-
-#     parallel_eqs = ntuple(Val(nown)) do j
-#         @inline
-#         iparent_new = global_eqs[j].self
-#         fn          = counterpart(fns_own_global[j])
-#         ntuple(Val(nbranches)) do i
-#             @inline
-#             generate_equations(branches[i], fn; iparent = iparent_new, iself = iself_ref[])
-#         end
-#     end
-    
-#     (global_eqs..., local_eqs..., parallel_eqs...) |> superflatten
-# end
 
 @generated function add_global_equations(iparent, iparallel_childs, iself_ref, fns_own_global::NTuple{F,Any}, leafs, ::Val{N}) where {F,N}
     quote
@@ -296,97 +251,3 @@ function compute_residual(c, x::SVector{N,T}, vars, others) where {N,T}
     
     return SA[residual...]
 end
-
-viscous1   = LinearViscosity(5e19)
-viscous2   = LinearViscosity(1e20)
-powerlaw   = PowerLawViscosity(5e19, 3)
-drucker    = DruckerPrager(1e6, 10.0, 0.0)
-elastic    = Elasticity(1e10, 1e12)
-
-c, x, vars, args, others = let
-    # elastic - viscous -- parallel
-    #                         |  
-    #                viscous --- viscous  |
-    s1     = SeriesModel(viscous1, viscous2)
-    p      = ParallelModel(viscous1, viscous2)
-    c      = SeriesModel(elastic, viscous1, p)
-    vars   = (; ε = 1e-15, θ = 1e-20) # input variables (constant)
-    args   = (; τ = 1e2, P = 1e6)     # guess variables (we solve for these, differentiable)
-    others = (; dt = 1e10)            # other non-differentiable variables needed to evaluate the state functions
-
-    x = SA[
-        values(args)..., # global guess(es), solving for these
-        values(vars)..., # local  guess(es)
-    ]
-
-    c, x, vars, args, others
-end
-
-c, x, vars, args, others = let
-    # viscous -- parallel
-    #               |  
-    #      viscous --- viscous  
-    #         |  
-    #      viscous
-    s1     = SeriesModel(viscous1, viscous2)
-    p      = ParallelModel(s1, viscous2)
-    c      = SeriesModel(viscous1, p)
-    vars   = (; ε = 1e-15) # input variables (constant)
-    args   = (; τ = 1e2) # guess variables (we solve for these, differentiable)
-    others = (;)       # other non-differentiable variables needed to evaluate the state functions
-
-    x = SA[
-        values(args)..., # global guess(es), solving for these
-        values(vars)..., # local  guess(es)
-        values(args)..., # local  guess(es)
-    ]
-
-    c, x, vars, args, others
-end
-
-c, x, vars, args, others = let
-    # viscous -- parallel
-    #               |  
-    #      viscous --- viscous  
-    p      = ParallelModel(viscous1, viscous2)
-    c      = SeriesModel(viscous1, p)
-    vars   = (; ε = 1e-15) # input variables (constant)
-    args   = (; τ = 1e2) # guess variables (we solve for these, differentiable)
-    others = (;)       # other non-differentiable variables needed to evaluate the state functions
-
-    x = SA[
-        values(args)..., # global guess(es), solving for these
-        values(vars)..., # local  guess(es)
-    ]
-
-    c, x, vars, args, others
-end
-
-
-c, x, vars, args, others = let
-    # viscous -- parallel
-    #               |  
-    #      viscous --- viscous  
-    #         |  
-    #      viscous
-    s1     = SeriesModel(viscous1, viscous2)
-    p      = ParallelModel(s1, viscous2)
-    c      = SeriesModel(viscous1, p)
-    vars   = (; ε = 1e-15) # input variables (constant)
-    args   = (; τ = 1e2) # guess variables (we solve for these, differentiable)
-    others = (;)       # other non-differentiable variables needed to evaluate the state functions
-
-    x = SA[
-        values(args)..., # global guess(es), solving for these
-        values(vars)..., # local  guess(es)
-        values(args)..., # local  guess(es)
-    ]
-
-    c, x, vars, args, others
-end
-
-compute_residual(c, x, vars, others)
-ForwardDiff.jacobian(x -> compute_residual(c, x, vars, others), x)
-
-# @b compute_residual($(c, x, vars, others)...)
-@b ForwardDiff.jacobian(y -> compute_residual($c, y, $vars, $others), $x)
