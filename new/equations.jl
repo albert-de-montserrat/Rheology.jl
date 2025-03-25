@@ -98,7 +98,6 @@ end
     end
 end
 
-iparent= 0; iself = 0
 function generate_equations(c::AbstractCompositeModel; iparent::Int64 = 0, iself::Int64 = 0)
     iself_ref = Ref{Int64}(iself)
 
