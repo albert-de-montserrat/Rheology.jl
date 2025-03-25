@@ -64,6 +64,8 @@ compute_Q(r::DruckerPrager, τ, P) = τ - P * sind(r.ψ)
 @inline compute_stress(r::Elasticity; ε = 0, τ0 = 0, dt = 0, kwargs...) = τ0 + 2 * r.G * dt * ε
 @inline compute_stress(r::IncompressibleElasticity; ε = 0, τ0 = 0, dt = 0, kwargs...) = τ0 + 2 * r.G * dt * ε
 @inline compute_stress(r::DruckerPrager; τ_pl = 0, kwargs...) = τ_pl
+@inline compute_stress(r::LTPViscosity; ε = 0, kwargs...) = r.σr / r.Q * asinh(ε / r.ε0) + r.σb
+
 # splatter wrapper
 @inline compute_stress(r::AbstractRheology, kwargs::NamedTuple) = compute_stress(r; kwargs...)
 
