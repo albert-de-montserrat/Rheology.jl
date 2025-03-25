@@ -37,6 +37,7 @@ function get_own_functions(c::AbstractCompositeModel, fn_state::F1, fn_global::F
 end
 
 get_own_functions(::Tuple{}) = (), ()
+# get_own_functions(::Tuple{}) = compute_strain_rate, ()
 
 get_local_functions(c::NTuple{N, AbstractCompositeModel}) where N = ntuple(i -> get_own_functions(c[i]), Val(N))
 
@@ -97,6 +98,7 @@ end
     end
 end
 
+iparent= 0; iself = 0
 function generate_equations(c::AbstractCompositeModel; iparent::Int64 = 0, iself::Int64 = 0)
     iself_ref = Ref{Int64}(iself)
 
@@ -144,24 +146,8 @@ function generate_equations(c::AbstractCompositeModel, fns_own_global::F; iparen
     # add globals
     iself_ref[] += 1
     global_eqs   = CompositeEquation(iparent, iparallel_childs, iself_ref[], fns_own_global, leafs, Val(false))
-    
-    # global_eqs = ntuple(Val(nown)) do i
-        # @inline
-        # iself_ref[] += 1
-        # CompositeEquation(iparent, iparallel_childs .+ (i - 1), iself_ref[], fns_own_global, leafs, Val(false))
-    # end 
 
     local_eqs =  add_local_equations(iparent, ilocal_childs, iself_ref, fns_own_local, leafs, Val(nlocal))
-
-    # parallel_eqs = ntuple(Val(nown)) do j
-    #     @inline
-    #     iparent_new = global_eqs[j].self
-    #     fn          = counterpart(fns_own_global[j])
-    #     ntuple(Val(nbranches)) do i
-    #         @inline
-    #         generate_equations(branches[i], fn; iparent = iparent_new, iself = iself_ref[])
-    #     end
-    # end
     
     iparent_new  = global_eqs.self
     fn           = counterpart(fns_own_global)
@@ -172,7 +158,6 @@ function generate_equations(c::AbstractCompositeModel, fns_own_global::F; iparen
 
     return (global_eqs, local_eqs..., parallel_eqs...) |> superflatten
 end
-
 
 @generated function generate_args_template(eqs::NTuple{N, CompositeEquation}) where N 
     quote
@@ -196,7 +181,7 @@ end
     evaluate_state_function(fn, rheology, args)
 end
 
-@generated function evaluate_state_function(fn::F,rheology::NTuple{N, AbstractRheology}, args)  where {N,F}
+@generated function evaluate_state_function(fn::F, rheology::NTuple{N, AbstractRheology}, args)  where {N,F}
     quote
         @inline
         vals = Base.@ntuple $N i -> fn(rheology[i], args)
@@ -204,12 +189,13 @@ end
     end
 end
 
+evaluate_state_function(fn::F, rheology::Tuple{}, args) where {F} = 0e0
+
 # @inline evaluate_state_functions(eqs::NTuple{N, CompositeEquation}, args) where N = promote(ntuple(i -> evaluate_state_function(eqs[i], args[i]), Val(N))...)
 @generated function evaluate_state_functions(eqs::NTuple{N, CompositeEquation}, args) where N 
     quote
         @inline
-        Base.@nexprs $N i -> v_i = evaluate_state_function(eqs[i], args[i])
-        Base.@ncall $N tuple v
+        Base.@ntuple $N i -> evaluate_state_function(eqs[i], args[i])
     end
 end
 
