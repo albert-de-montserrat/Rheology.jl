@@ -15,6 +15,14 @@ struct PowerLawViscosity{T,I} <: AbstractRheology
     n::I # DO NOT PROMOTE TO FP BY DEFAULT
 end
 
+struct LTPViscosity{T,I} <: AbstractRheology
+    η::T
+    ε0::T
+    Q::T
+    σb::T
+    σr::T
+end
+
 struct Elasticity{T} <: AbstractRheology
     G::T
     K::T
