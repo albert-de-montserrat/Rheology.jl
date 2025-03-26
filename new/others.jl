@@ -7,7 +7,7 @@
     quote
         @inline
         b = false
-        Base.@nexprs $N i -> b = b * isvolumetric(r[i])
+        Base.@nexprs $N i -> b *= isvolumetric(r[i])
         Val(b)
     end
 end
