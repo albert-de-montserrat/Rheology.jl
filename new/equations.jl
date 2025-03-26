@@ -92,10 +92,26 @@ end
             fn          = counterpart(fns_own_global[j])
             Base.@ntuple $N2 i -> begin
                 @inline
-                generate_equations(branches[i], fn; iparent = iparent_new, iself = iself_ref[])
+                generate_equations(branches[i], fn, isvolumetric(branches[i]); iparent = iparent_new, iself = iself_ref[])
             end
         end
     end
+end
+
+# j = 2
+# iparent_new = global_eqs[j].self
+# fn          = counterpart(fns_own_global[j])
+# i = 1
+# branches = c.branches[i]
+# isvolumetric(branches)
+
+# generate_equations(branches, fn, isvolumetric(branches); iparent = iparent_new, iself = iself_ref[])
+
+generate_equations(::AbstractCompositeModel, ::typeof(compute_volumetric_strain_rate), ::Val{false}; iparent::Int64 = 0, iself::Int64 = 0) = ()
+generate_equations(::AbstractCompositeModel, ::typeof(compute_pressure), ::Val{false}; iparent::Int64 = 0, iself::Int64 = 0) = ()
+
+function generate_equations(c::AbstractCompositeModel, fns_own_global::F, ::Val; iparent::Int64 = 0, iself::Int64 = 0) where F
+    generate_equations(c, fns_own_global; iparent = iparent, iself = iself) 
 end
 
 function generate_equations(c::AbstractCompositeModel; iparent::Int64 = 0, iself::Int64 = 0)
@@ -200,10 +216,21 @@ evaluate_state_function(fn::F, rheology::Tuple{}, args) where {F} = 0e0
 end
 
 add_child( ::SVector, ::Tuple{}) = 0e0
-@generated function add_child(x::SVector, child::NTuple{N}) where {N}
+# @generated function add_child(x::SVector, child::NTuple{N}) where {N}
+#     quote
+#         @inline
+#         v = Base.@ntuple $N i -> x[child[i]]
+#         sum(v)
+#     end
+# end
+
+@generated function add_child(x::SVector{M, T}, child::NTuple{N}) where {M, T, N}
     quote
         @inline
-        v = Base.@ntuple $N i -> x[child[i]]
+        v = Base.@ntuple $N i -> begin
+            ind = child[i]
+            ind > N ? zero(T) : x[ind]
+        end 
         sum(v)
     end
 end
