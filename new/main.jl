@@ -1,15 +1,16 @@
 using ForwardDiff, StaticArrays, LinearAlgebra
+using GLMakie
 
 import Base.IteratorsMD.flatten
 
-include("others.jl")
 include("rheology_types.jl")
 include("state_functions.jl")
 include("kwargs.jl")
 include("composite.jl")
 include("recursion.jl")
 include("equations.jl")
-
+include("../src/print_rheology.jl")
+include("others.jl")
 
 viscous1    = LinearViscosity(5e19)
 viscous2    = LinearViscosity(1e20)
@@ -23,12 +24,12 @@ dislocation = DislocationCreep(3.5, 1, 1.1e-16, 1, 1, 1)
 c, x, vars, args, others = let
     # elastic - viscous -- parallel
     #                         |  
-    #                viscous --- viscous  |
+    #                viscous --- viscous
     s1     = SeriesModel(viscous1, viscous2)
     p      = ParallelModel(viscous1, viscous2)
     c      = SeriesModel(elastic, viscous1, p)
     vars   = (; ε = 1e-15, θ = 1e-20) # input variables (constant)
-    args   = (; τ = 1e2, P = 1e6)     # guess variables (we solve for these, differentiable)
+    args   = (; τ = 1e2, )     # guess variables (we solve for these, differentiable)
     others = (; dt = 1e10)            # other non-differentiable variables needed to evaluate the state functions
 
     x = SA[
@@ -155,10 +156,10 @@ c, x, vars, args, others = let
     #         |  
     #      viscous
     s1     = SeriesModel(viscous1, viscous2, viscous1)
-    p      = ParallelModel(s1, viscous2)
+    p      = ParallelModel(s1, viscous1)
     c      = SeriesModel(elastic, p)
     vars   = (; ε = 1e-15, θ = 1e-20) # input variables (constant)
-    args   = (; τ = 1e2,   P = 1e6)   # guess variables (we solve for these, differentiable)
+    args   = (; τ = 1e2)   # guess variables (we solve for these, differentiable)
     others = (; dt = 1e10)            # other non-differentiable variables needed to evaluate the state functions
 
     x = SA[
@@ -170,6 +171,9 @@ c, x, vars, args, others = let
     c, x, vars, args, others
 end
 
+r  = compute_residual(c, x, vars, others)
+J  = ForwardDiff.jacobian(y -> compute_residual(c, y, vars, others), x)
+        
 # Arne's model 2
 c, x, vars, args, others = let
     viscous1    = LinearViscosity(1e15)
@@ -209,8 +213,8 @@ end
 
 # Arne's model 3
 c, x, vars, args, others = let
-    viscous1    = LinearViscosity(1e12)
-    viscous2    = LinearViscosity(1e12)
+    viscous1    = LinearViscosity(1e18)
+    viscous2    = LinearViscosity(1e18)
     elastic     = Elasticity(100e9, 1e12)
     LTP         = LTPViscosity(6.2e-13, 76, 1.8e9, 3.4e9)
     diffusion   = DiffusionCreep(1, 1, 1, 1.5e-3, 1, 1, 1)
@@ -244,17 +248,19 @@ c, x, vars, args, others = let
     s1     = SeriesModel(diffusion, dislocation, LTP)
     p1     = ParallelModel(s1, viscous2)
     p2     = ParallelModel(elastic, viscous2)
-    c      = SeriesModel(p1, p2)
+    
+    c      = SeriesModel(p1, viscous1)
 
     # vars   = (; ε = 1e-12 * 2) # input variables (constant)
-    args   = (; τ = 2e9)       # guess variables (we solve for these, differentiable)
-    others = (; dt = 1e1)     # other non-differentiable variables needed to evaluate the state functions
+    args   = (; τ = 1e9)       # guess variables (we solve for these, differentiable)
+    others = (; dt = 1e10)     # other non-differentiable variables needed to evaluate the state functions
 
+    # solution vector
     x = SA[
         values(args)..., # global guess(es), solving for these
         0 .* values(vars)..., # local  guess(es)
         0 .* values(vars)..., # local  guess(es)
-        0 .* values(args)..., # local  guess(es)
+        # 0 .* values(args)..., # local  guess(es)
     ]
 
     c, x, vars, args, others
@@ -286,6 +292,7 @@ function solve(c, x, vars, others)
     it      = 0
     er      = Inf
     # Δx      = similar(x)
+    local α
     while er > tol
         it += 1
         r  = compute_residual(c, x, vars, others)
@@ -311,9 +318,14 @@ for i in eachindex(ε)
 end
 
 f,ax,h    = lines(ε, τ)
+# f,ax,h    = lines(log10.(ε), τ)
 ax.xlabel = L"\dot\varepsilon_{II}"
 ax.ylabel = L"\tau_{II}"
-f
+f |> display
 
-# # compute_strain_rate(LTP, (; τ = 1e9) )
-# # ForwardDiff.derivative(x -> compute_strain_rate(LTP, (; τ = x) ), 2e9)
+r  = compute_residual(c, x, vars, others)
+J  = ForwardDiff.jacobian(y -> compute_residual(c, y, vars, others), x)
+
+
+@b compute_residual($(c, x, vars, others)...)
+@b ForwardDiff.jacobian(y -> compute_residual($c, y, $vars, $others), $x)
