@@ -1,21 +1,11 @@
-function augment_args(args::NTuple{N, NamedTuple}, Δx) where N
-    ntuple(Val(N)) do i 
-        @inline 
-        k = keys(args[i])
-        v = values(args[i]) .+ Δx[i]
-        (; zip(k, v)...)
+@inline function augment_args(args, Δx)
+    k = keys(args)
+    vals = MVector(values(args))
+    for i in eachindex(Δx)
+        vals[i] += Δx[i]
     end
+    return (; zip(k, vals)...)
 end
-
-
-# @inline function augment_args(args, Δx)
-#     k = keys(args)
-#     vals = MVector(values(args))
-#     for i in eachindex(Δx)
-#         vals[i] += Δx[i]
-#     end
-#     return (; zip(k, vals)...)
-# end
 
 @inline function update_args2(args, x::SVector{N, T}) where {N,T}
     k = keys(args)
