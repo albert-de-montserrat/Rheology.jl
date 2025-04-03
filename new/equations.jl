@@ -51,28 +51,44 @@ function get_local_functions(c::ParallelModel)
     local_parallel_state_functions(fns_own_all)
 end
 
-@inline generate_equations(::Tuple{}; iparent = 0) = ()
 
-@generated function add_global_equations(iparent, iparallel_childs, iself_ref, fns_own_global::NTuple{F,Any}, leafs, ::Val{N}) where {F,N}
+@inline has_children(::F, branch)                              where F = Val(true)
+@inline has_children(::typeof(compute_pressure), branch)               = isvolumetric(branch)
+@inline has_children(::typeof(compute_volumetric_strain_rate), branch) = isvolumetric(branch)
+
+@inline correct_children(fn::F, branch::AbstractCompositeModel, children) where F = correct_children(children, has_children(fn, branch))
+@generated function correct_children(fn::F, branch::NTuple{N,AbstractCompositeModel}, children) where {F, N} 
+    quote
+        new_children = Base.@ntuple $N i -> correct_children(children[i], has_children(fn, branch[i]))
+        return superflatten(new_children )
+    end
+end
+@inline correct_children(children, ::Val{true})  = children
+@inline correct_children(::Any,    ::Val{false}) = ()
+
+@generated function add_global_equations(iparent, iparallel_childs, iself_ref, fns_own_global::NTuple{F,Any}, leafs, branches, ::Val{N}) where {F,N}
     quote
         Base.@ntuple $N i-> begin
             @inline
-            iself_ref[] += 1
-            CompositeEquation(iparent, iparallel_childs .+ (i - 1), iself_ref[], fns_own_global[i], leafs, Val(true))
+            iself_ref[]       += 1
+            children           = iparallel_childs .+ (i - 1)
+            corrected_children = correct_children(fns_own_global[i], branches, children)
+            CompositeEquation(iparent, corrected_children, iself_ref[], fns_own_global[i], leafs, Val(true))
         end
     end
 end
 
-@generated function add_global_equations(iparent, iparallel_childs, iself_ref, fns_own_global::F, leafs, ::Val{N}) where {F,N}
+@generated function add_global_equations(iparent, iparallel_childs, iself_ref, fns_own_global::F, leafs, branches, ::Val{N}) where {F,N}
     quote
         Base.@ntuple $N i-> begin
             @inline
-            iself_ref[] += 1
-            CompositeEquation(iparent, iparallel_childs .+ (i - 1), iself_ref[], fns_own_global, leafs, Val(true))
+            iself_ref[]       += 1
+            children           = iparallel_childs .+ (i - 1)
+            corrected_children = correct_children(fns_own_global[i], branches, children)
+            CompositeEquation(iparent, corrected_children, iself_ref[], fns_own_global, leafs, Val(true))
         end
     end
 end
-
 
 @generated function add_local_equations(iparent, ilocal_childs, iself_ref, fns_own_local, leafs, ::Val{N}) where {N}
     quote
@@ -98,16 +114,12 @@ end
     end
 end
 
-has_children(::F, branch)                              where F = Val(true)
-has_children(::typeof(compute_pressure), branch)               = isvolumetric(branches)
-has_children(::typeof(compute_volumetric_strain_rate), branch) = isvolumetric(branches)
-
-correct_children(::F, branch) where F = Val(true)
-
 
 # eliminate equations
 @inline generate_equations(::AbstractCompositeModel, ::typeof(compute_pressure), ::Val{false}; iparent::Int64 = 0, iself::Int64 = 0)               = ()
 @inline generate_equations(::AbstractCompositeModel, ::typeof(compute_volumetric_strain_rate), ::Val{false}; iparent::Int64 = 0, iself::Int64 = 0) = ()
+
+@inline generate_equations(::Tuple{}; iparent = 0) = ()
 
 function generate_equations(c::AbstractCompositeModel; iparent::Int64 = 0, iself::Int64 = 0)
     iself_ref = Ref{Int64}(iself)
@@ -126,7 +138,7 @@ function generate_equations(c::AbstractCompositeModel; iparent::Int64 = 0, iself
     iparallel_childs = ntuple(i -> iparent + nlocal + offsets_parallel[i] + i + nown, Val(nbranches))
 
     # add global equations
-    global_eqs = add_global_equations(iparent, iparallel_childs, iself_ref, fns_own_global, leafs, Val(nown))
+    global_eqs = add_global_equations(iparent, iparallel_childs, iself_ref, fns_own_global, leafs, branches, Val(nown))
     # add local equations
     local_eqs =  add_local_equations(iparent, ilocal_childs, iself_ref, fns_own_local, leafs, Val(nlocal))
     # add parallel equations
@@ -210,26 +222,26 @@ evaluate_state_function(fn::F, rheology::Tuple{}, args) where {F} = 0e0
 end
 
 add_child(::SVector, ::Tuple{}) = 0e0
-@generated function add_child(x::SVector{M}, child::NTuple{N}) where {M, N}
-    quote
-        @inline
-        v = Base.@ntuple $N i -> begin
-            ind = child[i]
-            M > ind ? x[ind] : 0e0
-        end
-        sum(v)
-    end
-end
-
 # @generated function add_child(x::SVector{M}, child::NTuple{N}) where {M, N}
 #     quote
 #         @inline
 #         v = Base.@ntuple $N i -> begin
-#             x[child[i]] 
+#             ind = child[i]
+#             M > ind ? x[ind] : 0e0
 #         end
 #         sum(v)
 #     end
 # end
+
+@generated function add_child(x::SVector{M}, child::NTuple{N}) where {M, N}
+    quote
+        @inline
+        v = Base.@ntuple $N i -> begin
+            x[child[i]] 
+        end
+        sum(v)
+    end
+end
 
 @generated function add_children(residual::NTuple{N, Any}, x::SVector{N}, eqs::NTuple{N, CompositeEquation}) where {N}
     quote
@@ -282,35 +294,3 @@ function compute_residual(c, x::SVector{N,T}, vars, others, ind::Int64, ipartial
     
     return residual
 end
-
-
-@b compute_residual($(c, x, vars, others)...)
-@b compute_residual($(c, x, vars, others, 1, 1)...)
-@b ForwardDiff.derivative(x->compute_residual($(c, x, vars, others, 1, 1)...),x)
-@b ForwardDiff.derivative(x->compute_residual($(c, x, vars, others, 1, 1)...), $x[1])
-
-inds = ((1,1), (1,2))
-
-@generated function foo(c, x, vars, others, inds::NTuple{N}) where N
-    quote
-        Base.@ntuple $N i -> compute_residual(c, x, vars, others, inds[i]...)
-    end
-end
-
-@generated function dfoo(c, x, vars, others, inds::NTuple{N}) where N
-    quote
-        Base.@ntuple $N i -> ForwardDiff.derivative(x -> compute_residual(c, x, vars, others, inds[i]...), x)
-    end 
-end
-function dfoo(c, x, vars, others, inds::NTuple{N}) where N
-    ntuple(Val(N)) do i
-         ForwardDiff.derivative(x -> compute_residual(c, x, vars, others, inds[i]...), x)
-    end 
-end
-
-dfoo(c, x, vars, others, inds)
-@b foo($(c, x, vars, others, inds)...)
-
-
-
-compute_residual(c, x, vars, others, inds[1]...)
