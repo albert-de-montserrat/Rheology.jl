@@ -149,12 +149,15 @@ end
 # Note: would probably be good to define AbstractViscosity, AbstractElasticity in addition to AbstractPlasticity
 print_rheology_matrix(v::String) = ["         "]
 print_rheology_matrix(v::LinearViscosity) = ["--⟦▪̲̅▫̲̅▫̲̅▫̲̅--"]
+print_rheology_matrix(v::BulkViscosity) = ["--⟦▪̲̅▫̲̅▫̲̅▫̲̅--"]
 print_rheology_matrix(v::LTPViscosity) = ["--⟦▪̲̅▫̲̅▫̲̅▫̲̅--"]
 print_rheology_matrix(v::DislocationCreep) = ["--⟦▪̲̅▫̲̅▫̲̅▫̲̅--"]
 print_rheology_matrix(v::DiffusionCreep) = ["--⟦▪̲̅▫̲̅▫̲̅▫̲̅--"]
 print_rheology_matrix(v::PowerLawViscosity) = ["--⟦▪̲̅▫̲̅▫̲̅▫̲̅--"]
 print_rheology_matrix(v::AbstractRheology) = ["--?????--"]
 print_rheology_matrix(v::Elasticity) = ["--/\\/\\/--"]
+print_rheology_matrix(v::BulkElasticity) = ["--/\\/\\/--"]
+print_rheology_matrix(v::IncompressibleElasticity) = ["--/\\/\\/--"]
 print_rheology_matrix(v::AbstractPlasticity) = ["--▬▬▬__--"]
 #print_rheology_matrix(v::DruckerPrager)      = ["-dp▬▬__--"] # we can further
 

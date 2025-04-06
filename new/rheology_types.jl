@@ -5,6 +5,10 @@ struct LinearViscosity{T} <: AbstractRheology
     η::T
 end
 
+struct BulkViscosity{T} <: AbstractRheology
+    χ::T
+end
+
 # Linear viscous rheology for which we ony define a compute_stress routine
 struct LinearViscosityStress{T} <: AbstractRheology
     η::T    
@@ -24,7 +28,6 @@ struct DiffusionCreep{I, T} <: AbstractRheology
     V::T
     R::T
 end
-
 DiffusionCreep(args...) = DiffusionCreep(args[1], promote(args[2:end]...)...)
 
 struct DislocationCreep{I, T} <: AbstractRheology
@@ -54,6 +57,10 @@ struct IncompressibleElasticity{T} <: AbstractRheology
     G::T
 end
 
+struct BulkElasticity{T} <: AbstractRheology
+    K::T
+end
+
 struct DruckerPrager{T} <: AbstractPlasticity
     C::T 
     ϕ::T # in degrees for now
@@ -68,20 +75,22 @@ DruckerPrager(args...) = DruckerPrager(promote(args...)...)
 @inline length_state_functions(r::Tuple{})                             = ()
 
 # table of methods needed per rheology
+#@inline series_state_functions(::LinearViscosity)          = (compute_strain_rate,)
+#@inline series_state_functions(::LTPViscosity)             = (compute_strain_rate,)
+#@inline series_state_functions(::PowerLawViscosity)        = (compute_strain_rate,)
+#@inline series_state_functions(::IncompressibleElasticity) = (compute_strain_rate, )
+
 types = (:LinearViscosity, :LTPViscosity, :DiffusionCreep, :DislocationCreep, :PowerLawViscosity, :IncompressibleElasticity)
 for t in types 
     @eval @inline series_state_functions(::($t))          = (compute_strain_rate,)
 
 end
-# @inline series_state_functions(::LinearViscosity)          = (compute_strain_rate,)
-# @inline series_state_functions(::DiffusionCreep)           = (compute_strain_rate,)
-# @inline series_state_functions(::DislocationCreep)         = (compute_strain_rate,)
-# @inline series_state_functions(::LTPViscosity)             = (compute_strain_rate,)
 @inline series_state_functions(::LinearViscosityStress)    = (compute_stress,)
-# @inline series_state_functions(::PowerLawViscosity)        = (compute_strain_rate,)
-# @inline series_state_functions(::PowerLawViscosity)        = (compute_stress,)
+@inline series_state_functions(::BulkViscosity)            = (compute_volumetric_strain_rate,)
+
+
 @inline series_state_functions(::Elasticity)               = compute_strain_rate, compute_volumetric_strain_rate
-# @inline series_state_functions(::IncompressibleElasticity) = (compute_strain_rate, )
+@inline series_state_functions(::BulkElasticity)           = (compute_volumetric_strain_rate,)
 @inline series_state_functions(::DruckerPrager)            = compute_strain_rate, compute_volumetric_strain_rate, compute_lambda
 @inline series_state_functions(::DruckerPrager)            = (compute_strain_rate, compute_lambda)
 #@inline series_state_functions(r::Series) = series_state_functions(r.elements)
@@ -102,8 +111,7 @@ end
 
 # does not allocate:
 @inline series_state_functions(r::NTuple{N, AbstractRheology}) where N = series_state_functions(first(r))..., series_state_functions(Base.tail(r))...
-@inline series_state_functions(::Tuple{})= (compute_strain_rate,)
-# @inline series_state_functions(::Tuple{})= ()
+@inline series_state_functions(::Tuple{})= ()
 
 # function series_state_functions(composite::NTuple{N, AbstractRheology}) where N
 #     statefuns = ntuple(Val(N)) do i
@@ -116,20 +124,12 @@ end
 
 ## METHODS FOR PARALLEL MODELS
 # table of methods needed per rheology
-types = (:LinearViscosity, :LTPViscosity, :DiffusionCreep, :DislocationCreep, :PowerLawViscosity, :IncompressibleElasticity)
-for t in types 
-    @eval @inline parallel_state_functions(::($t))          = (compute_stress,)
-
-end
-# @inline parallel_state_functions(::LinearViscosity)          = (compute_stress,)
-# @inline parallel_state_functions(::LTPViscosity)             = (compute_stress,)
-# @inline parallel_state_functions(::DiffusionCreep)           = (compute_stress,)
-# @inline parallel_state_functions(::DislocationCreep)         = (compute_stress,)
-# @inline parallel_state_functions(::PowerLawViscosity)        = (compute_stress,)
-# @inline parallel_state_functions(::IncompressibleElasticity) = (compute_stress,)
-@inline parallel_state_functions(::Elasticity)               = compute_stress, compute_pressure
-@inline parallel_state_functions(::DruckerPrager)            = compute_stress, compute_pressure, compute_lambda, compute_plastic_strain_rate, compute_volumetric_plastic_strain_rate
-@inline parallel_state_functions(::AbstractRheology)         = error("Rheology not defined")
+@inline parallel_state_functions(::LinearViscosity) = (compute_stress,)
+@inline parallel_state_functions(::PowerLawViscosity) = (compute_stress,)
+@inline parallel_state_functions(::Elasticity) = compute_stress, compute_pressure
+@inline parallel_state_functions(::IncompressibleElasticity) = (compute_stress, )
+@inline parallel_state_functions(::DruckerPrager) = compute_stress, compute_pressure, compute_lambda, compute_plastic_strain_rate, compute_volumetric_plastic_strain_rate
+@inline parallel_state_functions(::AbstractRheology) = error("Rheology not defined")
 
 
 # handle tuples

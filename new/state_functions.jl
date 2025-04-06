@@ -33,6 +33,8 @@ end
 
 # compute_volumetric_strain_rate methods
 @inline compute_volumetric_strain_rate(r::Elasticity; P=0, P0 = 0, dt = 0, kwargs...) = (P - P0) / (r.K * dt)
+@inline compute_volumetric_strain_rate(r::BulkElasticity; P=0, P0 = 0, dt = 0, kwargs...) = (P - P0) / (r.K * dt)
+@inline compute_volumetric_strain_rate(r::BulkViscosity; P=0, kwargs...) = P / r.Χ
 @inline function compute_volumetric_strain_rate(r::DruckerPrager; τ = 0, λ = 0, P = 0, kwargs...) 
     λ * ForwardDiff.derivative(x -> compute_Q(r, τ, x), P) # perhaps this derivative needs to be hardcoded
 end
@@ -71,6 +73,8 @@ compute_Q(r::DruckerPrager, τ, P) = τ - P * sind(r.ψ)
 
 # compute_pressure methods
 @inline compute_pressure(r::Elasticity; θ = 0, P0 = 0, dt = 0, kwargs...) = P0 +  r.K * dt * θ
+@inline compute_pressure(r::BulkElasticity; θ = 0, P0 = 0, dt = 0, kwargs...) = P0 +  r.K * dt * θ
+@inline compute_pressure(r::BulkViscosity; θ = 0, kwargs...) = θ * 1 * r.χ
 @inline compute_pressure(r::DruckerPrager; P_pl = 0, kwargs...) = P_pl
 @inline compute_pressure(r::AbstractRheology; kwargs...) = 0e0 # for any other rheology that doesnt need this method
 # splatter wrapper
