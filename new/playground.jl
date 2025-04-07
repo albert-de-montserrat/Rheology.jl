@@ -117,10 +117,10 @@ c, x, vars, args, others = let
     others = (; dt = 1e10)       # other non-differentiable variables needed to evaluate the state functions
 
     x = SA[
-        values(args)[1], # global guess(es), solving for these
-        values(args)[2], # local  guess(es) 
         values(vars)[1], # global guess(es), solving for these
-        values(vars)[2], # local  guess(es)
+        values(args)[1], # local  guess(es) 
+        values(vars)[2], # global guess(es), solving for these
+        values(args)[2], # local  guess(es)
     ]
     c, x, vars, args, others
 end
