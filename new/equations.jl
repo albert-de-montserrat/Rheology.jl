@@ -13,6 +13,89 @@ struct CompositeEquation{IsGlobal, T, F, R}
     end
 end
 
+# function generate_equations(c::AbstractCompositeModel; iparent::Int64 = 0, iself::Int64 = 0)
+#     iself_ref = Ref{Int64}(iself)
+
+#     (; branches, leafs) = c
+    
+#     fns_own_global, fns_own_local = get_own_functions(c)
+#     fns_branches_global,          = get_own_functions(branches)
+
+#     nown             = length(fns_own_global)
+#     nlocal           = length(fns_own_local)
+#     nbranches        = length(branches)
+
+#     ilocal_childs    = ntuple(i -> iparent + nown - 1 + i, Val(nlocal))
+#     offsets_parallel = (0, length.(fns_branches_global)...)
+#     iparallel_childs = ntuple(i -> iparent + nlocal + offsets_parallel[i] + i + nown, Val(nbranches))
+
+#     # add global equations
+#     global_eqs = add_global_equations(iparent, iparallel_childs, iself_ref, fns_own_global, leafs, branches, Val(nown))
+#     # add local equations
+#     local_eqs =  add_local_equations(iparent, ilocal_childs, iself_ref, fns_own_local, leafs, Val(nlocal))
+#     # add parallel equations
+#     parallel_eqs = add_parallel_equations(global_eqs, branches, iself_ref, fns_own_global)
+    
+#     return (global_eqs..., local_eqs..., parallel_eqs...) |> superflatten 
+# end
+@inline generate_equations(c::AbstractCompositeModel) = generate_equations(c, global_series_functions(c))
+
+@generated function generate_equations(c::AbstractCompositeModel, fns::NTuple{N, Any}) where N
+    quote
+        iparent = 0
+        iself = 0
+
+        eqs = Base.@ntuple $N i -> begin
+            @inline
+            eqs = generate_equations(c, fns[i], isvolumetric(c); iparent = iparent, iself = iself)
+            iparent = iself = eqs[end].self + 1
+            eqs
+        end
+        superflatten(eqs)
+    end
+end
+
+function generate_equations(c::AbstractCompositeModel, fns_own_global::F, ::Val; iparent::Int64 = 0, iself::Int64 = 0) where F
+    iself_ref = Ref{Int64}(iself)
+
+    (; branches, leafs) = c
+    
+    _, fns_own_local      = get_own_functions(c)
+    # fns_branches_global,_ = get_own_functions(branches)
+
+    nown             = 1 #length(fns_own_global)
+    nlocal           = length(fns_own_local)
+    nbranches        = length(branches)
+
+    # iglobal          = ntuple(i -> iparent + i - 1, Val(nown))
+    ilocal_childs    = ntuple(i -> iparent + nown - 1 + i, Val(nlocal))
+    offsets_parallel = (0, ntuple(i -> i, Val(nbranches))...)
+    # offsets_parallel = (0, length.(fns_branches_global)...)
+    iparallel_childs = ntuple(i -> iparent + nlocal + offsets_parallel[i] + i + nown, Val(nbranches))
+
+    # add globals
+    iself_ref[] += 1
+    global_eqs   = CompositeEquation(iparent, iparallel_childs, iself_ref[], fns_own_global, leafs, Val(false))
+
+    local_eqs    = add_local_equations(iparent, ilocal_childs, iself_ref, fns_own_local, leafs, Val(nlocal))
+    
+    iparent_new  = global_eqs.self
+    fn           = counterpart(fns_own_global)
+    parallel_eqs = ntuple(Val(nbranches)) do i
+        @inline
+        generate_equations(branches[i], fn, isvolumetric(branches[i]); iparent = iparent_new, iself = iself_ref[])
+    end
+
+    return (global_eqs, local_eqs..., parallel_eqs...) |> superflatten
+end
+
+# eliminate equations
+@inline generate_equations(::AbstractCompositeModel, ::typeof(compute_pressure), ::Val{false}; iparent::Int64 = 0, iself::Int64 = 0)               = ()
+@inline generate_equations(::AbstractCompositeModel, ::typeof(compute_volumetric_strain_rate), ::Val{false}; iparent::Int64 = 0, iself::Int64 = 0) = ()
+@inline generate_equations(::Tuple{}; iparent = 0) = ()
+
+#### 
+
 fn_pairs = (
     (compute_strain_rate, compute_stress),
     (compute_volumetric_strain_rate, compute_pressure),
@@ -50,7 +133,6 @@ function get_local_functions(c::ParallelModel)
     fns_own_all    = parallel_state_functions(c.leafs)
     local_parallel_state_functions(fns_own_all)
 end
-
 
 @inline has_children(::F, branch)                              where F = Val(true)
 @inline has_children(::typeof(compute_pressure), branch)               = isvolumetric(branch)
@@ -112,73 +194,6 @@ end
             end
         end
     end
-end
-
-
-# eliminate equations
-@inline generate_equations(::AbstractCompositeModel, ::typeof(compute_pressure), ::Val{false}; iparent::Int64 = 0, iself::Int64 = 0)               = ()
-@inline generate_equations(::AbstractCompositeModel, ::typeof(compute_volumetric_strain_rate), ::Val{false}; iparent::Int64 = 0, iself::Int64 = 0) = ()
-
-@inline generate_equations(::Tuple{}; iparent = 0) = ()
-
-function generate_equations(c::AbstractCompositeModel; iparent::Int64 = 0, iself::Int64 = 0)
-    iself_ref = Ref{Int64}(iself)
-
-    (; branches, leafs) = c
-    
-    fns_own_global, fns_own_local = get_own_functions(c)
-    fns_branches_global,          = get_own_functions(branches)
-
-    nown             = length(fns_own_global)
-    nlocal           = length(fns_own_local)
-    nbranches        = length(branches)
-
-    ilocal_childs    = ntuple(i -> iparent + nown - 1 + i, Val(nlocal))
-    offsets_parallel = (0, length.(fns_branches_global)...)
-    iparallel_childs = ntuple(i -> iparent + nlocal + offsets_parallel[i] + i + nown, Val(nbranches))
-
-    # add global equations
-    global_eqs = add_global_equations(iparent, iparallel_childs, iself_ref, fns_own_global, leafs, branches, Val(nown))
-    # add local equations
-    local_eqs =  add_local_equations(iparent, ilocal_childs, iself_ref, fns_own_local, leafs, Val(nlocal))
-    # add parallel equations
-    parallel_eqs = add_parallel_equations(global_eqs, branches, iself_ref, fns_own_global)
-    
-    return (global_eqs..., local_eqs..., parallel_eqs...) |> superflatten 
-end
-
-function generate_equations(c::AbstractCompositeModel, fns_own_global::F, ::Val; iparent::Int64 = 0, iself::Int64 = 0) where F
-    iself_ref = Ref{Int64}(iself)
-
-    (; branches, leafs) = c
-    
-    _, fns_own_local      = get_own_functions(c)
-    # fns_branches_global,_ = get_own_functions(branches)
-
-    nown             = 1 #length(fns_own_global)
-    nlocal           = length(fns_own_local)
-    nbranches        = length(branches)
-
-    # iglobal          = ntuple(i -> iparent + i - 1, Val(nown))
-    ilocal_childs    = ntuple(i -> iparent + nown - 1 + i, Val(nlocal))
-    offsets_parallel = (0, ntuple(i -> i, Val(nbranches))...)
-    # offsets_parallel = (0, length.(fns_branches_global)...)
-    iparallel_childs = ntuple(i -> iparent + nlocal + offsets_parallel[i] + i + nown, Val(nbranches))
-
-    # add globals
-    iself_ref[] += 1
-    global_eqs   = CompositeEquation(iparent, iparallel_childs, iself_ref[], fns_own_global, leafs, Val(false))
-
-    local_eqs    = add_local_equations(iparent, ilocal_childs, iself_ref, fns_own_local, leafs, Val(nlocal))
-    
-    iparent_new  = global_eqs.self
-    fn           = counterpart(fns_own_global)
-    parallel_eqs = ntuple(Val(nbranches)) do i
-        @inline
-        generate_equations(branches[i], fn, isvolumetric(branches[i]); iparent = iparent_new, iself = iself_ref[])
-    end
-
-    return (global_eqs, local_eqs..., parallel_eqs...) |> superflatten
 end
 
 @generated function generate_args_template(eqs::NTuple{N, CompositeEquation}) where N 

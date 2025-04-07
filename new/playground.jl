@@ -10,6 +10,7 @@ include("composite.jl")
 include("recursion.jl")
 include("equations.jl")
 include("others.jl")
+include("function_utils.jl")
 
 function bt_line_search(Δx, J, x, r, composite, vars, others; α=1.0, ρ=0.5, c=1e-4, α_min=1e-8) where N
 
@@ -54,9 +55,13 @@ end
 
 viscous1    = LinearViscosity(5e19)
 viscous2    = LinearViscosity(1e20)
+viscousbulk = BulkViscosity(1e18)
 powerlaw    = PowerLawViscosity(5e19, 3)
 drucker     = DruckerPrager(1e6, 10.0, 0.0)
 elastic     = Elasticity(1e10, 1e12)
+elasticbulk = BulkElasticity(1e10)
+elasticinc  = IncompressibleElasticity(1e10)
+
 LTP         = LTPViscosity(6.2e-13, 76, 1.8e9, 3.4e9)
 diffusion   = DiffusionCreep(1, 1, 1, 1.5e-3, 1, 1, 1)
 dislocation = DislocationCreep(3.5, 1, 1.1e-16, 1, 1, 1)
@@ -81,6 +86,14 @@ c, x, vars, args, others = let
 end
 
 eqs = generate_equations(c)
+eqs[1].fn
+eqs[2].fn
+eqs[3].fn
+
+eqs[1].child
+eqs[2].child
+eqs[3].child
+
 r   = compute_residual(c, x, vars, others)
 J   = ForwardDiff.jacobian(y -> compute_residual(c, y, vars, others), x)
 
@@ -101,8 +114,42 @@ f,ax,h = scatterlines(log10.(ε), τ)
 # ax.ylabel = L"\tau_{II}"
 f
 
-args   = (; τ = 2e9)       # guess variables (we solve for these, differentiable)
-others = (; dt = 1e-2)     # other non-differentiable variables needed to evaluate the state functions
-vars   = (; ε = 1e-5) # input variables (constant)
-compute_stress(LTP,      vars)
-compute_stress(viscous1, vars)
+# args   = (; τ = 2e9)       # guess variables (we solve for these, differentiable)
+# others = (; dt = 1e-2)     # other non-differentiable variables needed to evaluate the state functions
+# vars   = (; ε = 1e-5) # input variables (constant)
+# compute_stress(LTP,      vars)
+# compute_stress(viscous1, vars)
+
+
+# c = SeriesModel(viscous1,ParallelModel(viscousbulk, elasticbulk))
+# eqs = generate_equations(c)
+# eqs[1].fn
+# eqs[2].fn
+
+
+generate_equations(c::AbstractCompositeModel) = generate_equations(c, global_series_functions(c))
+
+@generated function generate_equations(c::AbstractCompositeModel, fns::NTuple{N, Any}) where N
+    quote
+        iparent = 0
+        iself = 0
+
+        eqs = Base.@ntuple $N i -> begin
+            @inline
+            eqs = generate_equations(c, fns[i], isvolumetric(c); iparent = iparent, iself = iself)
+            iparent = iself = eqs[end].self + 1
+            eqs
+        end
+        superflatten(eqs)
+    end
+end
+
+fns = global_series_functions(c)
+
+# @b generate_equations($c)
+
+# eqs = generate_equations(c)
+# eqs[1].fn
+# eqs[2].fn
+# eqs[3].fn
+# eqs[4].fn
