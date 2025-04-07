@@ -105,3 +105,28 @@ f,ax,h = scatterlines(log10.(ε), τ)
 ax.xlabel = "εII"
 ax.ylabel = "τII"
 f
+
+c, x, vars, args, others = let
+    # elasticbulk - viscousbulk -- parallel
+    #                                 |  
+    #                       viscous1 --- elasticinc
+    p      = ParallelModel(viscous1, elastic)
+    c      = SeriesModel(elasticbulk, viscousbulk, p)
+    vars   = (; θ = 1e-20, ε = 1e-15)      # input variables (constant)
+    args   = (; P = 1e6, τ = 1e3) # guess variables (we solve for these, differentiable)
+    others = (; dt = 1e10)       # other non-differentiable variables needed to evaluate the state functions
+
+    x = SA[
+        values(args)[1], # global guess(es), solving for these
+        values(args)[2], # local  guess(es) 
+        values(vars)[1], # global guess(es), solving for these
+        values(vars)[2], # local  guess(es)
+    ]
+    c, x, vars, args, others
+end
+
+eqs = generate_equations(c)
+r   = compute_residual(c, x, vars, others)
+J   = ForwardDiff.jacobian(y -> compute_residual(c, y, vars, others), x)
+
+sol = solve(c, x, vars, others)
