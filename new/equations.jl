@@ -97,7 +97,6 @@ function generate_equations(c::AbstractCompositeModel, fns_own_global::F, ind_in
 
     local_eqs    = add_local_equations(iparent, ilocal_childs, iself_ref, fns_own_local, leafs, Val(nlocal))
     
-    @show global_eqs.self
     iparent_new  = global_eqs.self
     fn           = counterpart(fns_own_global)
     parallel_eqs = ntuple(Val(nbranches)) do i
