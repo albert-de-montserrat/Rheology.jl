@@ -84,10 +84,10 @@ function generate_equations(c::AbstractCompositeModel, fns_own_global::F, ind_in
     nbranches        = length(branches)
 
     # iglobal          = ntuple(i -> iparent + i - 1, Val(nown))
-    ilocal_childs    = ntuple(i -> iparent + nown - 1 + i, Val(nlocal))
+    ilocal_childs    = ntuple(i -> iself + nown - 1 + i, Val(nlocal))
     offsets_parallel = (0, ntuple(i -> i, Val(nbranches))...)
     # offsets_parallel = (0, length.(fns_branches_global)...)
-    iparallel_childs = ntuple(i -> iparent + nlocal + offsets_parallel[i] + i + nown, Val(nbranches))
+    iparallel_childs = ntuple(i -> iself + nlocal + offsets_parallel[i] + i + nown, Val(nbranches))
 
     # add globals
     # iself_ref[] += 1
