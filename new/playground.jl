@@ -102,46 +102,6 @@ for i in eachindex(ε)
 end
 
 f,ax,h = scatterlines(log10.(ε), τ)
-# ax.xlabel = L"\dot\varepsilon_{II}"
-# ax.ylabel = L"\tau_{II}"
+ax.xlabel = "εII"
+ax.ylabel = "τII"
 f
-
-# args   = (; τ = 2e9)       # guess variables (we solve for these, differentiable)
-# others = (; dt = 1e-2)     # other non-differentiable variables needed to evaluate the state functions
-# vars   = (; ε = 1e-5) # input variables (constant)
-# compute_stress(LTP,      vars)
-# compute_stress(viscous1, vars)
-
-
-# c = SeriesModel(viscous1,ParallelModel(viscousbulk, elasticbulk))
-# eqs = generate_equations(c)
-# eqs[1].fn
-# eqs[2].fn
-
-
-generate_equations(c::AbstractCompositeModel) = generate_equations(c, global_series_functions(c))
-
-@generated function generate_equations(c::AbstractCompositeModel, fns::NTuple{N, Any}) where N
-    quote
-        iparent = 0
-        iself = 0
-
-        eqs = Base.@ntuple $N i -> begin
-            @inline
-            eqs = generate_equations(c, fns[i], isvolumetric(c); iparent = iparent, iself = iself)
-            iparent = iself = eqs[end].self + 1
-            eqs
-        end
-        superflatten(eqs)
-    end
-end
-
-fns = global_series_functions(c)
-
-# @b generate_equations($c)
-
-# eqs = generate_equations(c)
-# eqs[1].fn
-# eqs[2].fn
-# eqs[3].fn
-# eqs[4].fn
