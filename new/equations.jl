@@ -108,9 +108,12 @@ function generate_equations(c::AbstractCompositeModel, fns_own_global::F, ind_in
 end
 
 # eliminate equations
-@inline generate_equations(::AbstractCompositeModel, ::typeof(compute_pressure), ind_input, ::Val, ::Val{false}; kwargs...)               = ()
-@inline generate_equations(::AbstractCompositeModel, ::typeof(compute_volumetric_strain_rate), ind_input, ::Val, ::Val{false}; kwargs...) = ()
-@inline generate_equations(::Tuple{}; iparent = 0) = ()
+for fn in (:compute_pressure, :compute_volumetric_strain_rate)
+    @eval begin
+        @inline generate_equations(::AbstractCompositeModel, ::typeof($fn), ::Integer, ::Val, ::Val{false}; kwargs...) = ()
+    end
+end
+@inline generate_equations(::Tuple{}; kwargs...) = ()
 
 #### 
 
