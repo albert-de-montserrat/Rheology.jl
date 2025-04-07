@@ -147,18 +147,28 @@ end
 
 # Print the individual rheological elements in the REPL
 # Note: would probably be good to define AbstractViscosity, AbstractElasticity in addition to AbstractPlasticity
+# colors:
+#           \e[34m - blue (for compressible elements)
+#           \e[39m - default
+
 print_rheology_matrix(v::String) = ["         "]
-print_rheology_matrix(v::LinearViscosity) = ["--⟦▪̲̅▫̲̅▫̲̅▫̲̅--"]
-print_rheology_matrix(v::BulkViscosity) = ["--⟦▪̲̅▫̲̅▫̲̅▫̲̅--"]
-print_rheology_matrix(v::LTPViscosity) = ["--⟦▪̲̅▫̲̅▫̲̅▫̲̅--"]
-print_rheology_matrix(v::DislocationCreep) = ["--⟦▪̲̅▫̲̅▫̲̅▫̲̅--"]
-print_rheology_matrix(v::DiffusionCreep) = ["--⟦▪̲̅▫̲̅▫̲̅▫̲̅--"]
-print_rheology_matrix(v::PowerLawViscosity) = ["--⟦▪̲̅▫̲̅▫̲̅▫̲̅--"]
-print_rheology_matrix(v::AbstractRheology) = ["--?????--"]
-print_rheology_matrix(v::Elasticity) = ["--/\\/\\/--"]
-print_rheology_matrix(v::BulkElasticity) = ["--/\\/\\/--"]
-print_rheology_matrix(v::IncompressibleElasticity) = ["--/\\/\\/--"]
-print_rheology_matrix(v::AbstractPlasticity) = ["--▬▬▬__--"]
+print_rheology_matrix(v::LinearViscosity) = ["\e[39m--⟦▪̲̅▫̲̅▫̲̅▫̲̅--\e[39m"]
+print_rheology_matrix(v::BulkViscosity) = ["\e[34m--⟦▪̲̅▫̲̅▫̲̅▫̲̅--\e[39m"]
+print_rheology_matrix(v::LTPViscosity) = ["\e[39m--⟦▪̲̅▫̲̅▫̲̅▫̲̅--\e[39m"]
+print_rheology_matrix(v::DislocationCreep) = ["\e[39m--⟦▪̲̅▫̲̅▫̲̅▫̲̅--\e[39m"]
+print_rheology_matrix(v::DiffusionCreep) = ["\e[39m--⟦▪̲̅▫̲̅▫̲̅▫̲̅--\e[39m"]
+print_rheology_matrix(v::PowerLawViscosity) = ["\e[39m--⟦▪̲̅▫̲̅▫̲̅▫̲̅--\e[39m"]
+print_rheology_matrix(v::AbstractRheology) = ["\e[39m--?????--\e[39m"]
+function print_rheology_matrix(v::Elasticity) 
+    if _isvolumetric(v)
+        return ["\e[34m--/\\/\\/--\e[39m"]
+    else
+        return ["\e[39m--/\\/\\/--\e[39m"]
+    end
+end
+print_rheology_matrix(v::BulkElasticity) = ["\e[34m--/\\/\\/--\e[39m"]
+print_rheology_matrix(v::IncompressibleElasticity) = ["\e[39m--/\\/\\/--\e[39m"]
+print_rheology_matrix(v::AbstractPlasticity) = ["\e[39m--▬▬▬__--\e[39m"]
 #print_rheology_matrix(v::DruckerPrager)      = ["-dp▬▬__--"] # we can further
 
 #=
