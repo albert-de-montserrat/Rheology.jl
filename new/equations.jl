@@ -6,12 +6,27 @@ struct CompositeEquation{IsGlobal, T, F, R}
     self::Int64    # equation number
     fn::F          # state function
     rheology::R 
+    ind_input::Int64
 
-    function CompositeEquation(parent::Int64, child::T, self::Int64, fn::F, rheology::R, ::Val{B}) where {T, F, R, B}
+    function CompositeEquation(parent::Int64, child::T, self::Int64, fn::F, rheology::R, ind_input, ::Val{B}) where {T, F, R, B}
         @assert B isa Bool
-        new{B, T, F, R}(parent, child, self, fn, rheology)
+        new{B, T, F, R}(parent, child, self, fn, rheology, ind_input)
     end
 end
+
+
+# struct CompositeEquation{IsGlobal, T, F, R}
+#     parent::Int64  # i-th element of x to be substracted
+#     child::T       # i-th element of x to be added
+#     self::Int64    # equation number
+#     fn::F          # state function
+#     rheology::R 
+
+#     function CompositeEquation(parent::Int64, child::T, self::Int64, fn::F, rheology::R, ::Val{B}) where {T, F, R, B}
+#         @assert B isa Bool
+#         new{B, T, F, R}(parent, child, self, fn, rheology)
+#     end
+# end
 
 # function generate_equations(c::AbstractCompositeModel; iparent::Int64 = 0, iself::Int64 = 0)
 #     iself_ref = Ref{Int64}(iself)
@@ -44,26 +59,27 @@ end
     quote
         iparent = 0
         iself = 0
-
+        isGlobal = Val(true)
         eqs = Base.@ntuple $N i -> begin
             @inline
-            eqs = generate_equations(c, fns[i], isvolumetric(c); iparent = iparent, iself = iself)
-            iparent = iself = eqs[end].self + 1
+            ind_input = i
+            eqs = generate_equations(c, fns[i], ind_input, isGlobal, isvolumetric(c); iparent = iparent, iself = iself)
+            iself = eqs[end].self 
+            iparent = 0
             eqs
         end
         superflatten(eqs)
     end
 end
 
-function generate_equations(c::AbstractCompositeModel, fns_own_global::F, ::Val; iparent::Int64 = 0, iself::Int64 = 0) where F
+function generate_equations(c::AbstractCompositeModel, fns_own_global::F, ind_input, ::Val{B}, ::Val; iparent::Int64 = 0, iself::Int64 = 0) where {F, B}
     iself_ref = Ref{Int64}(iself)
-
     (; branches, leafs) = c
     
     _, fns_own_local      = get_own_functions(c)
     # fns_branches_global,_ = get_own_functions(branches)
 
-    nown             = 1 #length(fns_own_global)
+    nown             = 1 # length(fns_own_global)
     nlocal           = length(fns_own_local)
     nbranches        = length(branches)
 
@@ -74,24 +90,27 @@ function generate_equations(c::AbstractCompositeModel, fns_own_global::F, ::Val;
     iparallel_childs = ntuple(i -> iparent + nlocal + offsets_parallel[i] + i + nown, Val(nbranches))
 
     # add globals
-    iself_ref[] += 1
-    global_eqs   = CompositeEquation(iparent, iparallel_childs, iself_ref[], fns_own_global, leafs, Val(false))
+    # iself_ref[] += 1
+    # global_eqs   = CompositeEquation(iparent, iparallel_childs, iself_ref[], fns_own_global, leafs, Val(false))
+    isGlobal     = Val(B)
+    global_eqs   = add_global_equations(iparent, iparallel_childs, iself_ref, fns_own_global, leafs, branches, ind_input, isGlobal, Val(1))
 
     local_eqs    = add_local_equations(iparent, ilocal_childs, iself_ref, fns_own_local, leafs, Val(nlocal))
     
+    @show global_eqs.self
     iparent_new  = global_eqs.self
     fn           = counterpart(fns_own_global)
     parallel_eqs = ntuple(Val(nbranches)) do i
         @inline
-        generate_equations(branches[i], fn, isvolumetric(branches[i]); iparent = iparent_new, iself = iself_ref[])
+        generate_equations(branches[i], fn, 0, Val(false), isvolumetric(branches[i]); iparent = iparent_new, iself = iself_ref[])
     end
 
     return (global_eqs, local_eqs..., parallel_eqs...) |> superflatten
 end
 
 # eliminate equations
-@inline generate_equations(::AbstractCompositeModel, ::typeof(compute_pressure), ::Val{false}; iparent::Int64 = 0, iself::Int64 = 0)               = ()
-@inline generate_equations(::AbstractCompositeModel, ::typeof(compute_volumetric_strain_rate), ::Val{false}; iparent::Int64 = 0, iself::Int64 = 0) = ()
+@inline generate_equations(::AbstractCompositeModel, ::typeof(compute_pressure), ind_input, ::Val, ::Val{false}; kwargs...)               = ()
+@inline generate_equations(::AbstractCompositeModel, ::typeof(compute_volumetric_strain_rate), ind_input, ::Val, ::Val{false}; kwargs...) = ()
 @inline generate_equations(::Tuple{}; iparent = 0) = ()
 
 #### 
@@ -152,7 +171,7 @@ end
     quote
         Base.@ntuple $N i-> begin
             @inline
-            iself_ref[]       += 1
+            iself_ref[]       += 1 
             children           = iparallel_childs .+ (i - 1)
             corrected_children = correct_children(fns_own_global[i], branches, children)
             CompositeEquation(iparent, corrected_children, iself_ref[], fns_own_global[i], leafs, Val(true))
@@ -172,12 +191,20 @@ end
     end
 end
 
+function add_global_equations(iparent, iparallel_childs, iself_ref, fns_own_global::F, leafs, branches, ind_input, ::Val{B}, ::Val{1}) where {F,B}
+    @inline
+    iself_ref[]       += 1
+    children           = iparallel_childs
+    corrected_children = correct_children(fns_own_global, branches, children)
+    CompositeEquation(iparent, corrected_children, iself_ref[], fns_own_global, leafs, ind_input, Val(B))
+end
+
 @generated function add_local_equations(iparent, ilocal_childs, iself_ref, fns_own_local, leafs, ::Val{N}) where {N}
     quote
         Base.@ntuple $N i-> begin
             @inline
             iself_ref[] += 1
-            CompositeEquation(iparent, ilocal_childs[i], iself_ref[], fns_own_local[i], leafs, Val(false))
+            CompositeEquation(iparent, ilocal_childs[i], iself_ref[], fns_own_local[i], leafs, 0, Val(false))
         end
     end
 end
@@ -270,7 +297,7 @@ function add_children(residual::Number, x::SVector, eq::CompositeEquation)
 end
 
 # if global, subtract the variables
-@inline subtract_parent( ::SVector, eq::CompositeEquation{true} ,         vars) = vars[eq.self]
+@inline subtract_parent( ::SVector, eq::CompositeEquation{true} ,         vars) = vars[eq.ind_input]
 @inline subtract_parent(x::SVector, eq::CompositeEquation{false}, ::NamedTuple) = x[eq.parent]
 @generated function subtract_parent(residual::NTuple{N,Any}, x, eqs::NTuple{N, CompositeEquation}, vars) where {N} 
     quote

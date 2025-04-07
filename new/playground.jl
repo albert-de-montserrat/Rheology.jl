@@ -86,14 +86,6 @@ c, x, vars, args, others = let
 end
 
 eqs = generate_equations(c)
-eqs[1].fn
-eqs[2].fn
-eqs[3].fn
-
-eqs[1].child
-eqs[2].child
-eqs[3].child
-
 r   = compute_residual(c, x, vars, others)
 J   = ForwardDiff.jacobian(y -> compute_residual(c, y, vars, others), x)
 
