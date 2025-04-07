@@ -363,26 +363,57 @@ c, x, vars, args, others = let
     c, x, vars, args, others
 end
 
-#=
+
 c, x, vars, args, others = let
     # elastic - viscous -- bulkviscous -- bulkelastic 
-    #c      = SeriesModel(viscous1, elasticinc, viscousbulk, elasticbulk)
-    #c      = SeriesModel(viscous1, elasticinc)
-    c      = SeriesModel(viscous1, elastic)
-    
-    vars   = (; ε = 1e-15, θ = 1e-20)      # input variables (constant)
-    args   = (; τ = 1e3,   P = 1e6) # guess variables (we solve for these, differentiable)
-    others = (; dt = 1e10)       # other non-differentiable variables needed to evaluate the state functions
+    c      = SeriesModel(viscous1, elastic, viscousbulk, elasticbulk)
+    vars   = (; ε = 1e-15, θ = 1e-20)       # input variables (constant)
+    args   = (; τ = 1e3,   P = 1e6)         # guess variables (we solve for these, differentiable)
+    others = (; dt = 1e10)                  # other non-differentiable variables needed to evaluate the state functions
 
     x = SA[
         values(args)..., # global guess(es), solving for these
-        #values(vars)[1]..., # local  guess(es)
-        #values(args)[1]..., # local  guess(es)
+    ]
+
+    c, x, vars, args, others
+end
+
+c, x, vars, args, others = let
+    #             parallel    
+    #                |       
+    #   viscousbulk --- elasticbulkelastic 
+    c      = ParallelModel(viscousbulk, elasticbulk)
+    vars   = (; θ = 1e-20)       # input variables (constant)
+    args   = (; P = 1e6)         # guess variables (we solve for these, differentiable)
+    others = (; dt = 1e10)                  # other non-differentiable variables needed to evaluate the state functions
+
+    x = SA[
+        values(args)..., # global guess(es), solving for these
+    ]
+
+    c, x, vars, args, others
+end
+
+#=
+c, x, vars, args, others = let
+    #      elastic - viscous -    parallel    
+    #                                |       
+    #                   viscousbulk --- elasticbulk
+
+    p      = ParallelModel(viscousbulk, elasticbulk)
+    c      = SeriesModel(viscous1, elastic, p)
+    vars   = (; ε = 1e-15, θ = 1e-20)       # input variables (constant)
+    args   = (; τ = 1e3,   P = 1e6)         # guess variables (we solve for these, differentiable)
+    others = (; dt = 1e10)                  # other non-differentiable variables needed to evaluate the state functions
+
+    x = SA[
+        values(args)..., # global guess(es), solving for these
     ]
 
     c, x, vars, args, others
 end
 =#
+
 
 function solve(c, x, vars, others)
     tol     = 1e-9
@@ -432,6 +463,6 @@ end
 
        
 
-main(c, x, vars, args, others)
+#main(c, x, vars, args, others)
 
-#J  = ForwardDiff.jacobian(y -> compute_residual(c, y, vars, others), x)
+J  = ForwardDiff.jacobian(y -> compute_residual(c, y, vars, others), x)

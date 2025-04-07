@@ -34,7 +34,7 @@ end
 # compute_volumetric_strain_rate methods
 @inline compute_volumetric_strain_rate(r::Elasticity; P=0, P0 = 0, dt = 0, kwargs...) = (P - P0) / (r.K * dt)
 @inline compute_volumetric_strain_rate(r::BulkElasticity; P=0, P0 = 0, dt = 0, kwargs...) = (P - P0) / (r.K * dt)
-@inline compute_volumetric_strain_rate(r::BulkViscosity; P=0, kwargs...) = P / r.Χ
+@inline compute_volumetric_strain_rate(r::BulkViscosity; P=0, kwargs...) = P / r.χ
 @inline function compute_volumetric_strain_rate(r::DruckerPrager; τ = 0, λ = 0, P = 0, kwargs...) 
     λ * ForwardDiff.derivative(x -> compute_Q(r, τ, x), P) # perhaps this derivative needs to be hardcoded
 end
