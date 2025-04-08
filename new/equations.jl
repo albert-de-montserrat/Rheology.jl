@@ -120,6 +120,7 @@ end
 fn_pairs = (
     (compute_strain_rate, compute_stress),
     (compute_volumetric_strain_rate, compute_pressure),
+    (compute_lambda, compute_plastic_strain_rate),
 )
 
 for pair in fn_pairs

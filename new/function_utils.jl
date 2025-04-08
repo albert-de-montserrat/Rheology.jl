@@ -27,7 +27,7 @@ end
 function global_series_functions(c::SeriesModel)
     fns_leafs    = series_state_functions(c.leafs)
     fns_branches = series_state_functions(c.branches)
-    (fns_leafs..., fns_branches...) |> flatten_repeated_functions
+    (fns_leafs..., fns_branches...) |> flatten_repeated_functions |> global_series_state_functions
     # return global_series_state_functions(fns)
 end
 
