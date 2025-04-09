@@ -77,11 +77,14 @@ function print_rheology_matrix(v::ParallelModel)
     # Center the strings & put brackets around it
     B = create_string_vec(A)
 
-    nel = maximum(textwidth.(B))
+    nel = maximum(textwidth.(remove_colors_string.(B)))
     for i in 1:length(B)
         if any(in.(i_vec, i))
-            B[i] = cpad(B[i], nel, "-")
-            B[i] = "|" * B[i] * "|"
+            str_local = remove_colors_string(B[i])
+            str_local = cpad(str_local, nel, "-")
+            str_local = B[i][1:5]*str_local*B[i][end-5:end]
+            B[i] = "|" * str_local * "|"
+            
         else
             B[i] = cpad(B[i], nel, " ")
             B[i] = "|" * B[i] * "|"
@@ -89,6 +92,12 @@ function print_rheology_matrix(v::ParallelModel)
     end
 
     return B
+end
+
+
+function remove_colors_string(str::String)
+    str = replace(str, r"\e\[[0-9;]*m" => "")
+    return str
 end
 
 function create_string_vec(A)
