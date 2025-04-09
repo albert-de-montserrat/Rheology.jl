@@ -199,7 +199,6 @@ function add_global_equations(iparent, ilocal_childs, iparallel_childs, iself_re
     iself_ref[] += 1
     corrected_children = correct_children(fns_own_global, branches, iparallel_childs)
     children = (ilocal_childs..., corrected_children...)
-    @show children, corrected_children
     return CompositeEquation(iparent, children, iself_ref[], fns_own_global, leafs, ind_input, Val(B))
 end
 

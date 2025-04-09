@@ -35,3 +35,4 @@ include("rheologies.jl")
     @test s4.branches[1].branches          == (s1, )
     @test s4.branches[1].branches[1].leafs == s1.leafs
 end
+

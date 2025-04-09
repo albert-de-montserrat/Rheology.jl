@@ -19,20 +19,20 @@ struct SeriesModel{L, B} <: AbstractCompositeModel # not 100% about the subtypin
 end
 
 
-# for fun in (:compute_strain_rate, :compute_volumetric_strain_rate)
-#     @eval @inline _local_series_state_functions(::typeof($fun)) = ()
-#     @eval @inline _global_series_state_functions(fn::typeof($fun)) = (fn,)
-# end
+for fun in (:compute_strain_rate, :compute_volumetric_strain_rate)
+    @eval @inline _local_series_state_functions(::typeof($fun)) = ()
+    # @eval @inline _global_series_state_functions(fn::typeof($fun)) = (fn,)
+end
 
-# @inline _local_series_state_functions(fn::F) where {F <: Function} = (fn,)
+@inline _local_series_state_functions(fn::F) where {F <: Function} = (fn,)
 
-# @generated function local_series_state_functions(funs::NTuple{N, Any}) where {N}
-#     return quote
-#         @inline
-#         f = Base.@ntuple $N i -> _local_series_state_functions(@inbounds(funs[i]))
-#         Base.IteratorsMD.flatten(f)
-#     end
-# end
+@generated function local_series_state_functions(funs::NTuple{N, Any}) where {N}
+    return quote
+        @inline
+        f = Base.@ntuple $N i -> _local_series_state_functions(@inbounds(funs[i]))
+        Base.IteratorsMD.flatten(f)
+    end
+end
 
 # @inline _global_series_state_functions(::F) where {F <: Function} = ()
 
@@ -118,7 +118,7 @@ Base.size(c::Union{SeriesModel, ParallelModel}) = length(c.leafs), length(c.bran
 # #######################################################################
 
 # @inline global_series_functions(c::SeriesModel) = series_state_functions(c.leafs) |> flatten_repeated_functions |> global_series_state_functions
-# @inline local_series_functions(c::SeriesModel) = series_state_functions(c.leafs) |> flatten_repeated_functions |> local_series_state_functions
+@inline local_series_functions(c::SeriesModel) = series_state_functions(c.leafs) |> flatten_repeated_functions |> local_series_state_functions
 
 # @inline global_parallel_functions(c::SeriesModel) = ntuple(i -> parallel_state_functions(c.branches[i].leafs) |> flatten_repeated_functions |> global_parallel_state_functions, Val(count_parallel_elements(c)))
 # # @inline local_parallel_functions(c::SeriesModel)  = ntuple(i-> parallel_state_functions(c.branches[i].branches) |> flatten_repeated_functions |> local_parallel_state_functions, Val(count_parallel_elements(c)))
