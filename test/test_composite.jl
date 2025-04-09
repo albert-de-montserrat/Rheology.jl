@@ -1,21 +1,37 @@
 using Test 
 
-viscous  = LinearViscosity(1e18)
-powerlaw = PowerLawViscosity(5e19, 3)
-elastic  = Elasticity(1e10, 1e100) # im making up numbers
-drucker  = DruckerPrager(1e6, 30, 0) # C, ϕ, ψ
+include("rheologies.jl")
 
-p1       = ParallelModel(viscous, drucker)
-s1       = SeriesModel(elastic, powerlaw, p1)
-c1       = CompositeModel(s1)
+@testset "Test composite models" begin
+    s1 = SeriesModel(viscous1, viscous2)
 
-@test number_strain_rate_components(c1) == 3
-@test number_stress_components(c1)      == 2
+    @test s1.leafs    == (viscous1, viscous2)
+    @test s1.branches == ()
 
-s2       = SeriesModel(elastic, powerlaw)
-p2       = ParallelModel(viscous, s2)
-c2       = CompositeModel(p2)
+    p1 = ParallelModel(drucker, elastic)
+    s2 = SeriesModel(viscous1, p1)
 
-@test number_strain_rate_components(c2) == 2
-@test number_stress_components(c2)      == 2
+    @test s2.leafs                == (viscous1, )
+    @test s2.branches             == (p1, )
+    @test s2.branches[1].leafs    == (drucker, elastic)
+    @test s2.branches[1].branches == ()
 
+    p2 = ParallelModel(viscous1, powerlaw)
+    s3 = SeriesModel(p1, p2)
+
+    @test s3.leafs                == ()
+    @test s3.branches             == (p1, p2)
+    @test s3.branches[1].leafs    == (drucker, elastic)
+    @test s3.branches[1].branches == ()
+    @test s3.branches[2].leafs    == (viscous1, powerlaw)
+    @test s3.branches[2].branches == ()
+
+    p3 = ParallelModel(viscous1, s1)
+    s4 = SeriesModel(viscous1, p3)
+
+    @test s4.leafs                         == (viscous1, )
+    @test s4.branches                      == (p3, )
+    @test s4.branches[1].leafs             == (viscous1, )
+    @test s4.branches[1].branches          == (s1, )
+    @test s4.branches[1].branches[1].leafs == s1.leafs
+end
