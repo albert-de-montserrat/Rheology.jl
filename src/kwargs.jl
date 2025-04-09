@@ -44,45 +44,13 @@ end
 # @inline differentiable_kwargs(::Type{T}, ::typeof(state_var_reduction))                    where T = (; )
 @inline differentiable_kwargs(fun::F) where {F<:Function} = differentiable_kwargs(Float64, fun)
 
-# add numbers to the differentiable_kwargs as long as they are not part of the standard series variables
-function attach_nums(x::NamedTuple, n::Int64)
-    # This allocates - to be fixed!
-    k = keys(x)
-    if n>0
-        k_new = string.(keys(x)).*"_$n"
-        N = length(x)
-        k1 = ntuple(i-> Symbol(k_new[i]) , Val(N))
-    else
-        k1 = k
-    end
-    return NamedTuple{ k1}(values(x))
-end
-
-@inline differentiable_kwargs(::Type{T}, ::typeof(compute_strain_rate), i::Int64)                    where T = attach_nums((; τ = zero(T),), i)
-@inline differentiable_kwargs(::Type{T}, ::typeof(compute_volumetric_strain_rate), i::Int64)         where T = attach_nums((; τ = zero(T), P = zero(T)),i)
-@inline differentiable_kwargs(::Type{T}, ::typeof(compute_lambda), i::Int64)                         where T = attach_nums((; λ = zero(T)),i) # τ = zero(T), P = zero(T))
-@inline differentiable_kwargs(::Type{T}, ::typeof(compute_stress), i::Int64)                         where T = attach_nums((; ε = zero(T),),i)
-@inline differentiable_kwargs(::Type{T}, ::typeof(compute_pressure), i::Int64)                       where T = attach_nums((; θ = zero(T),),i)
-@inline differentiable_kwargs(::Type{T}, ::typeof(compute_plastic_strain_rate), i::Int64)            where T = attach_nums((; τ_pl = zero(T),),i)
-@inline differentiable_kwargs(::Type{T}, ::typeof(compute_plastic_stress), i::Int64)                 where T = attach_nums((; τ_pl = zero(T),),i)
-@inline differentiable_kwargs(::Type{T}, ::typeof(compute_volumetric_plastic_strain_rate), i::Int64) where T = attach_nums((; τ_pl = zero(T), P_pl = zero(T)),i)
-
 @inline differentiable_kwargs(::Tuple{}) = (;)
 @inline differentiable_kwargs(funs::NTuple{N, Any}) where N = differentiable_kwargs(Float64, funs)
-@inline differentiable_kwargs(funs::NTuple{N, Any}, nums::NTuple{N,Any}) where N = differentiable_kwargs(Float64, funs, nums)
 
 @generated function differentiable_kwargs(::Type{T}, funs::NTuple{N, Any}) where {N, T}
     quote
         @inline 
         Base.@nexprs $N i -> nt_i = differentiable_kwargs($T, funs[i])
-        Base.@ncall $N merge nt
-    end
-end
-
-@generated function differentiable_kwargs(::Type{T}, funs::NTuple{N, Any}, nums::NTuple{N,I}) where {N, T, I}
-    quote
-        @inline 
-        Base.@nexprs $N i -> nt_i = differentiable_kwargs($T, funs[i], nums[i])
         Base.@ncall $N merge nt
     end
 end
@@ -107,29 +75,3 @@ function split_args(args, statefuns::NTuple{N, Any}) where N
     args_diff = merge(args_diff, args_diff0)
     return args_diff, args_nondiff
 end
-
-"""
-    number_elements(composite::NTuple{N, AbstractRheology}; start::Int64=1)  where N
-
-Recursively creates a unique number for each rheological element
-"""
-function number_elements(composite::NTuple{N, AbstractRheology}; start::Int64=1)  where N
-    # this allocates but only needs to be done once...
-    number = ()
-    n = start-1;
-    for i=1:N
-        n += 1
-        if isa(composite[i], Series) || isa(composite[i], Parallel)
-            # recursively deal with series (or parallel) elements
-            numel = number_elements(composite[i].elements, start=n+1)
-            number = (number..., (n,numel))
-            n = maximum(numel)
-        else
-            number = (number..., n)
-        end
-    end
-    
-    return number
-end
-
-
