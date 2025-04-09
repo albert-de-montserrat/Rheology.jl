@@ -146,6 +146,27 @@ c, x, vars, args, others = let
     c, x, vars, args, others
 end
 
+c, x, vars, args, others = let
+    # viscous1  -- drucker
+    p      = ParallelModel(drucker, viscous1)    
+    c      = SeriesModel(viscous1, elastic, p)
+    vars   = (; θ = 1e-20, ε = 1e-15)      # input variables (constant)
+    args   = (; P = 1e6, τ = 1e3, λ = 0) # guess variables (we solve for these, differentiable)
+    others = (; dt = 1e10)       # other non-differentiable variables needed to evaluate the state functions
+
+    x = SA[
+        values(args)[2], # global guess(es), solving for these
+        values(args)[1], # global guess(es), solving for these
+        values(args)[3], # global guess(es), solving for these
+        
+    ]
+    c, x, vars, args, others
+end
+
+eqs = generate_equations(c);
+julia> length(eqs)
+6
+
 eqs = generate_equations(c);
 eqs[1].child
 eqs[2].child
@@ -155,3 +176,5 @@ eqs[2].parent
 
 r   = compute_residual(c, x, vars, others)
 J   = ForwardDiff.jacobian(y -> compute_residual(c, y, vars, others), x)
+
+
