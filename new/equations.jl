@@ -1,11 +1,11 @@
 include("recursion.jl")
 
 struct CompositeEquation{IsGlobal, T, F, R}
-    parent::Int64  # i-th element of x to be substracted
-    child::T       # i-th element of x to be added
-    self::Int64    # equation number
-    fn::F          # state function
-    rheology::R 
+    parent::Int64       # i-th element of x to be substracted
+    child::T            # i-th element of x to be added
+    self::Int64         # equation number
+    fn::F               # state function
+    rheology::R         
     ind_input::Int64
 
     function CompositeEquation(parent::Int64, child::T, self::Int64, fn::F, rheology::R, ind_input, ::Val{B}) where {T, F, R, B}
@@ -144,7 +144,35 @@ end
 get_own_functions(::Tuple{}) = (), ()
 # get_own_functions(::Tuple{}) = compute_strain_rate, ()
 
-get_local_functions(c::NTuple{N, AbstractCompositeModel}) where N = ntuple(i -> get_own_functions(c[i]), Val(N))
+# Number the rheological elements
+function get_el_numbering(c::NTuple{N, AbstractCompositeModel}, v=0) where N 
+    # This allocates
+    n = ();
+    for i=1:N
+        nmax = maximum(superflatten(n), init=v)
+        loc_num = get_el_numbering(c[i], nmax)
+        n = (n..., loc_num)
+    end
+
+   return n
+end
+
+get_el_numbering(c::NTuple{N, AbstractRheology}, v=0)       where N = ntuple(i -> i + v, Val(N))
+
+function get_el_numbering(c::SeriesModel,v=0)   
+    num_leafs    = get_el_numbering(c.leafs,v)
+    num_branches = get_el_numbering(c.branches,maximum(num_leafs))
+    return num_leafs, num_branches
+end
+
+function get_el_numbering(c::ParallelModel,v=0)   
+    num_leafs    = get_el_numbering(c.leafs,v)
+    num_branches = get_el_numbering(c.branches,maximum(num_leafs))
+    return num_leafs, num_branches
+end
+get_el_numbering(::Tuple{},v=0) = ()
+
+#get_local_functions(c::NTuple{N, AbstractCompositeModel}) where N = ntuple(i -> get_own_functions(c[i]), Val(N))
 
 function get_local_functions(c::SeriesModel)
     fns_own_all    = series_state_functions(c.leafs)
@@ -199,7 +227,7 @@ function add_global_equations(iparent, ilocal_childs, iparallel_childs, iself_re
     iself_ref[]       += 1
     corrected_children = correct_children(fns_own_global, branches, iparallel_childs)
     children           = (ilocal_childs..., corrected_children...)
-    @show children, corrected_children
+    #@show children, corrected_children
     CompositeEquation(iparent, children, iself_ref[], fns_own_global, leafs, ind_input, Val(B))
 end
 
@@ -320,6 +348,7 @@ end
 function compute_residual(c, x::SVector{N,T}, vars, others) where {N,T}
     
     eqs      = generate_equations(c)
+    @assert length(eqs) == length(x)
     args_all = generate_args_template(eqs, x, others)
 
     # # evaluates the self-components of the residual
