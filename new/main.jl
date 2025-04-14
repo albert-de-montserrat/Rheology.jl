@@ -5,8 +5,8 @@ import Base.IteratorsMD.flatten
 
 include("rheology_types.jl")
 include("state_functions.jl")
-include("kwargs.jl")
 include("composite.jl")
+include("kwargs.jl")
 include("recursion.jl")
 include("equations.jl")
 include("others.jl")
@@ -237,7 +237,7 @@ c, x, vars, args, others = let
 
     c, x, vars, args, others
 end
-
+#=
 # Arne's model 1
 c, x, vars, args, others = let
     # viscous -- parallel
@@ -394,7 +394,7 @@ c, x, vars, args, others = let
     c, x, vars, args, others
 end
 
-#=
+
 c, x, vars, args, others = let
     #      elastic - viscous -    parallel    
     #                                |       
@@ -414,6 +414,28 @@ c, x, vars, args, others = let
 end
 =#
 
+#=
+c, x, vars, args, others = let
+    # Burger's model
+    #      elastic - viscous -    parallel    
+    #                                |       
+    #                   elastic --- viscous
+
+    p      = ParallelModel(viscous2, elastic)
+    c      = SeriesModel(viscous1, elastic, p)
+    vars   = (; ε = 1e-15, θ = 1e-20)       # input variables (constant)
+    args   = (; τ = 1e3,   P = 1e6)         # guess variables (we solve for these, differentiable)
+    others = (; dt = 1e10)                  # other non-differentiable variables needed to evaluate the state functions
+
+    x = SA[
+        values(args)..., # global guess(es), solving for these
+        1 .* values(vars)[1]..., # local  guess(es)
+        1 .* values(args)[1]..., # local  guess(es)
+    ]
+
+    c, x, vars, args, others
+end
+=#
 
 function solve(c, x, vars, others)
     tol     = 1e-9
@@ -464,5 +486,6 @@ end
        
 
 #main(c, x, vars, args, others)
+eqs      = generate_equations(c)
 
 J  = ForwardDiff.jacobian(y -> compute_residual(c, y, vars, others), x)

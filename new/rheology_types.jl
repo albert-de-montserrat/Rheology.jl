@@ -1,25 +1,27 @@
 abstract type AbstractRheology end
 abstract type AbstractPlasticity <: AbstractRheology end # in case we need spacilization at some point
-
-struct LinearViscosity{T} <: AbstractRheology
+abstract type AbstractElasticity <: AbstractRheology end # in case we need spacilization at some point
+abstract type AbstractViscosity <: AbstractRheology end # in case we need spacilization at some point
+struct LinearViscosity{T} <: AbstractViscosity
     η::T
 end
+local_kwargs(r::LinearViscosity) = (τ = 0,)
 
-struct BulkViscosity{T} <: AbstractRheology
+struct BulkViscosity{T} <: AbstractViscosity
     χ::T
 end
 
 # Linear viscous rheology for which we ony define a compute_stress routine
-struct LinearViscosityStress{T} <: AbstractRheology
+struct LinearViscosityStress{T} <: AbstractViscosity
     η::T    
 end
 
-struct PowerLawViscosity{T,I} <: AbstractRheology
+struct PowerLawViscosity{T,I} <: AbstractViscosity
     η::T
     n::I # DO NOT PROMOTE TO FP BY DEFAULT
 end
 
-struct DiffusionCreep{I, T} <: AbstractRheology
+struct DiffusionCreep{I, T} <: AbstractViscosity
     n::I
     r::T
     p::T
@@ -30,7 +32,7 @@ struct DiffusionCreep{I, T} <: AbstractRheology
 end
 DiffusionCreep(args...) = DiffusionCreep(args[1], promote(args[2:end]...)...)
 
-struct DislocationCreep{I, T} <: AbstractRheology
+struct DislocationCreep{I, T} <: AbstractViscosity
     n::I # power-law exponent
     r::T # exponent of water-fugacity
     A::T # material specific rheological parameter
@@ -40,7 +42,7 @@ struct DislocationCreep{I, T} <: AbstractRheology
 end
 DislocationCreep(args...) = DislocationCreep(args[1], promote(args[2:end]...)...)
 
-struct LTPViscosity{T} <: AbstractRheology
+struct LTPViscosity{T} <: AbstractViscosity
     ε0::T # 6.2e-13
     Q::T  # 76
     σb::T # 1.8 GPa
@@ -48,16 +50,16 @@ struct LTPViscosity{T} <: AbstractRheology
 end
 LTPViscosity(args...) = LTPViscosity(promote(args...)...)
 
-struct Elasticity{T} <: AbstractRheology
+struct Elasticity{T} <: AbstractElasticity
     G::T
     K::T
 end
 
-struct IncompressibleElasticity{T} <: AbstractRheology
+struct IncompressibleElasticity{T} <: AbstractElasticity
     G::T
 end
 
-struct BulkElasticity{T} <: AbstractRheology
+struct BulkElasticity{T} <: AbstractElasticity
     K::T
 end
 
