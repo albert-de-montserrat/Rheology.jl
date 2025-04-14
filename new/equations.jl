@@ -61,7 +61,7 @@ end
         iparent = 0
         iself = 0
         isGlobal = Val(true)
-        el_num  = global_el_numbering(c)        # global element numbering (to be followed )
+        el_num  = global_eltype_numbering(c)        # global element numbering (to be followed )
         eqs = Base.@ntuple $N i -> begin
             @inline
             ind_input = i
@@ -149,7 +149,7 @@ end
 get_own_functions(::Tuple{}) = (), ()
 # get_own_functions(::Tuple{}) = compute_strain_rate, ()
 
-# Number the rheological elements
+# Number the rheological elements sequantially
 function global_el_numbering(c::NTuple{N, AbstractCompositeModel}, v=0) where N 
     # This allocates
     n = ();
@@ -162,15 +162,74 @@ function global_el_numbering(c::NTuple{N, AbstractCompositeModel}, v=0) where N
    return n
 end
 
-global_el_numbering(c::NTuple{N, AbstractRheology}, v=0) where N = ntuple(i -> i + v, Val(N))
+@generated function global_el_numbering(c::NTuple{N, AbstractRheology}, v=0) where N
+    #N = ntuple(i -> i + v, Val(N))
+    quote
+        Base.@ntuple $N i-> begin
+            @inline
+                i + v
+        end
+    end
+end
+
 
 function global_el_numbering(c::AbstractCompositeModel,v=0)   
     num_leafs    = global_el_numbering(c.leafs,v)
     num_branches = global_el_numbering(c.branches,maximum(num_leafs, init=v))
     return num_leafs, num_branches
 end
-
 global_el_numbering(::Tuple{},v=0) = ()
+
+
+# Numbers the type of the elements
+function global_eltype_numbering(c::NTuple{N, AbstractCompositeModel}, n_vi=0, n_el=0, n_pl=0) where N 
+    # This allocates
+    Nel = ();
+    for i=1:N
+        loc_num,n_vi, n_el, n_pl = global_eltype_numbering(c[i], n_vi, n_el, n_pl)
+        Nel = (Nel..., loc_num)
+    end
+
+   return Nel, n_vi, n_el, n_pl
+end
+
+function global_eltype_numbering(c::NTuple{N, AbstractRheology}, n_vi=0, n_el=0, n_pl=0) where N
+    Nel = ()
+    
+    for i=1:N
+        if isa(c[i], AbstractViscosity)
+            n_vi += 1
+            Nel = (Nel..., n_vi)
+        elseif isa(c[i], AbstractElasticity)
+            n_el += 1
+            Nel = (Nel..., n_el)
+        elseif isa(c[i], AbstractPlasticity)
+            n_pl += 1
+            Nel = (Nel..., n_pl)
+        else
+            error("Rheology not defined")
+        end
+    end
+    return Nel, n_vi, n_el, n_pl
+end
+
+function global_eltype_numbering(c::AbstractCompositeModel,n_vi=0, n_el=0, n_pl=0)   
+    num_leafs, n_vi, n_el, n_pl    = global_eltype_numbering(c.leafs,n_vi, n_el, n_pl)
+    if !isempty(c.branches)
+
+        num_branches, n_vi, n_el, n_pl = global_eltype_numbering(c.branches, n_vi, n_el, n_pl)
+    else
+        num_branches = ()
+    end
+    Nel = (num_leafs, num_branches)
+    return Nel, n_vi, n_el, n_pl
+end
+global_eltype_numbering(::Tuple{},n_vi=0, n_el=0, n_pl=0) = ()
+
+function global_eltype_numbering(c::AbstractCompositeModel) 
+    Nel, n_vi, n_el, n_pl = global_eltype_numbering(c, 0, 0, 0)
+    return Nel
+end
 
 #get_local_functions(c::NTuple{N, AbstractCompositeModel}) where N = ntuple(i -> get_own_functions(c[i]), Val(N))
 function get_local_functions(c::SeriesModel)

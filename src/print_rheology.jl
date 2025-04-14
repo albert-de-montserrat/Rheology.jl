@@ -45,7 +45,7 @@ function print_rheology_matrix(v::ParallelModel, el_num0=nothing, digits=1)
     A = Matrix{String}(undef, n, n)
     elements = superflatten((v.leafs, v.branches))
     if isnothing(el_num0)
-        el_num0   = global_el_numbering(v)
+        el_num0   = global_eltype_numbering(v)
         if maximum(superflatten(el_num0))>9
             digits=2
         end
@@ -84,12 +84,16 @@ function print_rheology_matrix(v::ParallelModel, el_num0=nothing, digits=1)
     # Center the strings & put brackets around it
     B = create_string_vec(A)
 
-    nel = maximum(textwidth.(remove_colors_string.(B)))
+    #nel = maximum(textwidth.(remove_colors_string.(B)))
+    #nel = maximum(textwidth.(B))
+    nel = maximum(length_str_no_colors.(B))
     for i in 1:length(B)
         if any(in.(i_vec, i))
-            str_local = remove_colors_string(B[i])
+            #str_local = remove_colors_string(B[i])
+            str_local = B[i]
+            
             str_local = cpad(str_local, nel, "-")
-            str_local = B[i][1:5]*str_local*B[i][end-5:end]
+            #str_local = B[i][1:5]*str_local*B[i][end-4:end]
             B[i] = "|" * str_local * "|"
             
         else
@@ -101,6 +105,7 @@ function print_rheology_matrix(v::ParallelModel, el_num0=nothing, digits=1)
     return B
 end
 
+length_str_no_colors(str) = textwidth(remove_colors_string.(str)) + 1*6 + 2
 
 function remove_colors_string(str::String)
     str = replace(str, r"\e\[[0-9;]*m" => "")
@@ -124,7 +129,7 @@ function print_rheology_matrix(v::SeriesModel, el_num0=nothing, digits=1)
     A = Matrix{String}(undef, n, n)
     elements = superflatten((v.leafs, v.branches))
     if isnothing(el_num0)
-        el_num0   = global_el_numbering(v)
+        el_num0   = global_eltype_numbering(v)
         if maximum(superflatten(el_num0))>9
             digits=2
         end
@@ -174,18 +179,8 @@ end
 #           \e[34m - blue (for compressible elements)
 #           \e[39m - default
 
-print_rheology_matrix(v::String,digits=1) = ["\e[39m  $(emptysuperscript(digits))       \e[39m"]
-#print_rheology_matrix(v::LinearViscosity,n=1) = ["\e[39m--⟦▪̲̅▫̲̅▫̲̅▫̲̅$(superscript(n))--\e[39m"]
-#print_rheology_matrix(v::BulkViscosity,n=nothing) = ["\e[34m--⟦▪̲̅▫̲̅▫̲̅▫̲̅$(superscript(n))--\e[39m"]
-#print_rheology_matrix(v::LTPViscosity,n=nothing) = ["\e[39m--⟦▪̲̅▫̲̅▫̲̅▫̲̅$(superscript(n))--\e[39m"]
-#print_rheology_matrix(v::DislocationCreep,n=nothing) = ["\e[39m--⟦▪̲̅▫̲̅▫̲̅▫̲̅$(superscript(n))--\e[39m"]
-#print_rheology_matrix(v::DiffusionCreep,n=nothing) = ["\e[39m--⟦▪̲̅▫̲̅▫̲̅▫̲̅$(superscript(n))--\e[39m"]
-#print_rheology_matrix(v::PowerLawViscosity,n=nothing) = ["\e[39m--⟦▪̲̅▫̲̅▫̲̅▫̲̅$(superscript(n))--\e[39m"]
-
-function print_rheology_matrix(v::AbstractViscosity,n=1, digits=1)
-    str = ["\e[39m--⟦▪̲̅▫̲̅▫̲̅▫̲̅$(superscript(n,digits))--\e[39m"]
-    return str
-end
+print_rheology_matrix(v::String,digits=1)                      = ["\e[39m  $(emptysuperscript(digits))       \e[39m"]
+print_rheology_matrix(v::AbstractViscosity,n=1, digits=1)      = ["\e[39m--⟦▪̲̅▫̲̅▫̲̅▫̲̅$(superscript(n,digits))--\e[39m"]
 print_rheology_matrix(v::AbstractRheology,n=nothing, digits=1) = ["\e[39m--?????$(superscript(n,digits))--\e[39m"]
 function print_rheology_matrix(v::AbstractElasticity, n=nothing, digits=1) 
     if _isvolumetric(v)
@@ -195,22 +190,6 @@ function print_rheology_matrix(v::AbstractElasticity, n=nothing, digits=1)
     end
 end
 print_rheology_matrix(v::AbstractPlasticity, n=nothing, digits=1) = ["\e[39m--▬▬▬__$(superscript(n,digits))--\e[39m"]
-
-#print_rheology_matrix(v::BulkElasticity) = ["\e[34m--/\\/\\/--\e[39m"]
-#print_rheology_matrix(v::IncompressibleElasticity) = ["\e[39m--/\\/\\/--\e[39m"]
-#print_rheology_matrix(v::DruckerPrager)      = ["-dp▬▬__--"] # we can further
-
-#=
-function create_rheology_string(str, rheo_Comp::CompositeRheology)
-
-    rheology = rheo_Comp.elements
-    for i in eachindex(rheology)
-        str = create_rheology_string(str, rheology[i])
-    end
-
-    return str
-end
-=#
 
 function create_rheology_string(str, rheo_Parallel::ParallelModel)
     rheology = rheo_Parallel.elements
@@ -259,8 +238,7 @@ function create_parallel_str(str)
             str = str[1:l_st2[1]] * str_sub * str[l_end2[1]:end]
         end
 
-
-        str1 = split(str[(l_start[1] + 1):(l_end[1] - 2)], ";")
+        str1 = split(str[(l_start[1] + 1):(l_end[1] - 3)], ";")
         len = maximum(textwidth.(str1))
         for i in eachindex(str1)
             str1[i] = "|" * cpad(str1[i], len, "-") * "|\n"
