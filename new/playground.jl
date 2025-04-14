@@ -11,6 +11,8 @@ include("recursion.jl")
 include("equations.jl")
 include("others.jl")
 include("function_utils.jl")
+include("../src/print_rheology.jl")
+
 
 function bt_line_search(Δx, J, x, r, composite, vars, others; α=1.0, ρ=0.5, c=1e-4, α_min=1e-8) where N
 
@@ -98,7 +100,7 @@ for i in eachindex(ε)
     vars = (; ε = ε[i], θ = 1e-15) # input variables (constant)
     sol = solve(c, x, vars, others)
     τ[i] = sol[1]
-    @show sol
+   # @show sol
 end
 
 f,ax,h = scatterlines(log10.(ε), τ)
@@ -131,7 +133,7 @@ J   = ForwardDiff.jacobian(y -> compute_residual(c, y, vars, others), x)
 
 sol = solve(c, x, vars, others)
 
-
+#=
 c, x, vars, args, others = let
     # viscous1  -- drucker
     c      = SeriesModel(viscous1, drucker)
@@ -146,6 +148,7 @@ c, x, vars, args, others = let
     c, x, vars, args, others
 end
 
+
 c, x, vars, args, others = let
     # viscous1  -- drucker
     p      = ParallelModel(drucker, viscous1)    
@@ -158,14 +161,13 @@ c, x, vars, args, others = let
         values(args)[2], # global guess(es), solving for these
         values(args)[1], # global guess(es), solving for these
         values(args)[3], # global guess(es), solving for these
-        
     ]
     c, x, vars, args, others
 end
-
+=#
 eqs = generate_equations(c);
-julia> length(eqs)
-6
+length(eqs)
+
 
 eqs = generate_equations(c);
 eqs[1].child
@@ -175,6 +177,6 @@ eqs[1].parent
 eqs[2].parent
 
 r   = compute_residual(c, x, vars, others)
-J   = ForwardDiff.jacobian(y -> compute_residual(c, y, vars, others), x)
+#J   = ForwardDiff.jacobian(y -> compute_residual(c, y, vars, others), x)
 
 

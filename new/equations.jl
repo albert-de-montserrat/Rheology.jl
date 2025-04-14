@@ -78,7 +78,6 @@ function generate_equations(c::AbstractCompositeModel, fns_own_global::F, ind_in
     iself_ref = Ref{Int64}(iself)
     (; branches, leafs) = c
     local_el = el_num[1]
-    @show local_el
   
     _, fns_own_local      = get_own_functions(c)
     # fns_branches_global,_ = get_own_functions(branches)

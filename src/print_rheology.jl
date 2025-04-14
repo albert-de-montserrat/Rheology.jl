@@ -2,14 +2,14 @@
 import Base.show
 
 # returns a matrix with strings in the right order
-function print_rheology_matrix(v::Tuple)
+function print_rheology_matrix(v::Tuple, el_num=nothing, digits=1)
 
     n = 40
     A = Matrix{String}(undef, n, n)
 
     i, j, i_max = 1, 0, 1
     for entry in eachindex(v)
-        out = print_rheology_matrix(v[entry])
+        out = print_rheology_matrix(v[entry], el_num[entry], digits)
         si = size(out)
         if prod(si) == 1
             j = j + 1
@@ -30,7 +30,7 @@ function print_rheology_matrix(v::Tuple)
     end
     for i in eachindex(A)
         if A[i] == ""
-            A[i] = print_rheology_matrix("")[1]
+            A[i] = print_rheology_matrix("",digits)[1]
         end
     end
 
@@ -40,14 +40,21 @@ function print_rheology_matrix(v::Tuple)
 end
 
 
-function print_rheology_matrix(v::ParallelModel)
+function print_rheology_matrix(v::ParallelModel, el_num0=nothing, digits=1)
     n = 40
     A = Matrix{String}(undef, n, n)
     elements = superflatten((v.leafs, v.branches))
+    if isnothing(el_num0)
+        el_num0   = global_el_numbering(v)
+        if maximum(superflatten(el_num0))>9
+            digits=2
+        end
+    end
+    el_num    = (el_num0[1]...,el_num0[2]...,)
     i, j = 1, 1
     i_vec = Int64[]
     for entry in eachindex(elements)
-        out = print_rheology_matrix(elements[entry])
+        out = print_rheology_matrix(elements[entry],el_num[entry], digits)
         si = size(out)
         if prod(si) == 1
             push!(i_vec, i)
@@ -112,13 +119,20 @@ function create_string_vec(A)
     return B
 end
 
-function print_rheology_matrix(v::SeriesModel)
+function print_rheology_matrix(v::SeriesModel, el_num0=nothing, digits=1)
     n = 40
     A = Matrix{String}(undef, n, n)
     elements = superflatten((v.leafs, v.branches))
+    if isnothing(el_num0)
+        el_num0   = global_el_numbering(v)
+        if maximum(superflatten(el_num0))>9
+            digits=2
+        end
+    end
+    el_num    = (el_num0[1]...,el_num0[2]...,)
     i, j, i_max = 1, 0, 1
     for entry in eachindex(elements)
-        out = print_rheology_matrix(elements[entry])
+        out = print_rheology_matrix(elements[entry], el_num[entry], digits)
         si = size(out)
         if prod(si) == 1
             j = j + 1
@@ -144,7 +158,7 @@ function print_rheology_matrix(v::SeriesModel)
 
     for i in eachindex(A)
         if A[i] == ""
-            A[i] = print_rheology_matrix("")[1]
+            A[i] = print_rheology_matrix("",digits)[1]
         end
     end
 
@@ -160,24 +174,30 @@ end
 #           \e[34m - blue (for compressible elements)
 #           \e[39m - default
 
-print_rheology_matrix(v::String) = ["         "]
-print_rheology_matrix(v::LinearViscosity) = ["\e[39m--⟦▪̲̅▫̲̅▫̲̅▫̲̅--\e[39m"]
-print_rheology_matrix(v::BulkViscosity) = ["\e[34m--⟦▪̲̅▫̲̅▫̲̅▫̲̅--\e[39m"]
-print_rheology_matrix(v::LTPViscosity) = ["\e[39m--⟦▪̲̅▫̲̅▫̲̅▫̲̅--\e[39m"]
-print_rheology_matrix(v::DislocationCreep) = ["\e[39m--⟦▪̲̅▫̲̅▫̲̅▫̲̅--\e[39m"]
-print_rheology_matrix(v::DiffusionCreep) = ["\e[39m--⟦▪̲̅▫̲̅▫̲̅▫̲̅--\e[39m"]
-print_rheology_matrix(v::PowerLawViscosity) = ["\e[39m--⟦▪̲̅▫̲̅▫̲̅▫̲̅--\e[39m"]
-print_rheology_matrix(v::AbstractRheology) = ["\e[39m--?????--\e[39m"]
-function print_rheology_matrix(v::Elasticity) 
+print_rheology_matrix(v::String,digits=1) = ["\e[39m  $(emptysuperscript(digits))       \e[39m"]
+#print_rheology_matrix(v::LinearViscosity,n=1) = ["\e[39m--⟦▪̲̅▫̲̅▫̲̅▫̲̅$(superscript(n))--\e[39m"]
+#print_rheology_matrix(v::BulkViscosity,n=nothing) = ["\e[34m--⟦▪̲̅▫̲̅▫̲̅▫̲̅$(superscript(n))--\e[39m"]
+#print_rheology_matrix(v::LTPViscosity,n=nothing) = ["\e[39m--⟦▪̲̅▫̲̅▫̲̅▫̲̅$(superscript(n))--\e[39m"]
+#print_rheology_matrix(v::DislocationCreep,n=nothing) = ["\e[39m--⟦▪̲̅▫̲̅▫̲̅▫̲̅$(superscript(n))--\e[39m"]
+#print_rheology_matrix(v::DiffusionCreep,n=nothing) = ["\e[39m--⟦▪̲̅▫̲̅▫̲̅▫̲̅$(superscript(n))--\e[39m"]
+#print_rheology_matrix(v::PowerLawViscosity,n=nothing) = ["\e[39m--⟦▪̲̅▫̲̅▫̲̅▫̲̅$(superscript(n))--\e[39m"]
+
+function print_rheology_matrix(v::AbstractViscosity,n=1, digits=1)
+    str = ["\e[39m--⟦▪̲̅▫̲̅▫̲̅▫̲̅$(superscript(n,digits))--\e[39m"]
+    return str
+end
+print_rheology_matrix(v::AbstractRheology,n=nothing, digits=1) = ["\e[39m--?????$(superscript(n,digits))--\e[39m"]
+function print_rheology_matrix(v::AbstractElasticity, n=nothing, digits=1) 
     if _isvolumetric(v)
-        return ["\e[34m--/\\/\\/--\e[39m"]
+        return ["\e[34m--/\\/\\/$(superscript(n, digits))--\e[39m"]
     else
-        return ["\e[39m--/\\/\\/--\e[39m"]
+        return ["\e[39m--/\\/\\/$(superscript(n, digits))--\e[39m"]
     end
 end
-print_rheology_matrix(v::BulkElasticity) = ["\e[34m--/\\/\\/--\e[39m"]
-print_rheology_matrix(v::IncompressibleElasticity) = ["\e[39m--/\\/\\/--\e[39m"]
-print_rheology_matrix(v::AbstractPlasticity) = ["\e[39m--▬▬▬__--\e[39m"]
+print_rheology_matrix(v::AbstractPlasticity, n=nothing, digits=1) = ["\e[39m--▬▬▬__$(superscript(n,digits))--\e[39m"]
+
+#print_rheology_matrix(v::BulkElasticity) = ["\e[34m--/\\/\\/--\e[39m"]
+#print_rheology_matrix(v::IncompressibleElasticity) = ["\e[39m--/\\/\\/--\e[39m"]
 #print_rheology_matrix(v::DruckerPrager)      = ["-dp▬▬__--"] # we can further
 
 #=
@@ -216,9 +236,9 @@ function create_rheology_string(str, rheology::Tuple)
 end
 
 # Print the individual rheological elements in the REPL
-create_rheology_string(str, rheo_Parallel::AbstractRheology) = str = str * "--⟦▪̲̅▫̲̅▫̲̅▫̲̅--"
-create_rheology_string(str, rheo_Parallel::AbstractPlasticity) = str = str * "--▬▬▬__--"
-create_rheology_string(str, rheo_Parallel::Elasticity) = str = str * "--/\\/\\/--"
+#create_rheology_string(str, rheo_Parallel::AbstractRheology) = str = str * "--⟦▪̲̅▫̲̅▫̲̅▫̲̅--"
+#create_rheology_string(str, rheo_Parallel::AbstractPlasticity) = str = str * "--▬▬▬__--"
+#create_rheology_string(str, rheo_Parallel::Elasticity) = str = str * "--/\\/\\/--"
 
 
 function create_parallel_str(str)
@@ -280,6 +300,28 @@ struct InverseCreepLaw{N} <: AbstractRheology
     end
 end
 
+"""
+Creates a superscript string for the given integer.
+"""
+function superscript(n, digits=1)   
+    str = "$(n[1])"
+    if n[1]<10 && digits==2
+        str = "0" * str
+    end
+    str = replace(str, "0" => "⁰","1" => "¹","2" => "²","3" => "³","4" => "⁴","5" => "⁵","6" => "⁶","7" => "⁷","8" => "⁸","9" => "⁹")    
+    
+    return str
+end
+
+superscript(n::Nothing, digits=1) = ""
+function emptysuperscript(digits=1)
+    if digits==1
+        str = " "
+    elseif digits==2
+        str = "  "
+    end
+    return str
+end
 
 
 # Print the individual rheological elements in the REPL
