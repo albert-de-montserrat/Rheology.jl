@@ -5,13 +5,13 @@ struct CompositeEquation{IsGlobal, T, F, R, RT}
     child::T            # i-th element of x to be added
     self::Int64         # equation number
     fn::F               # state function
-    rheology::R         
+    rheology::R
     ind_input::Int64
     el_number::RT
 
     function CompositeEquation(parent::Int64, child::T, self::Int64, fn::F, rheology::R, ind_input, ::Val{B}, el_number::RT) where {T, F, R, B, RT}
         @assert B isa Bool
-        new{B, T, F, R, RT}(parent, child, self, fn, rheology, ind_input, el_number)
+        return new{B, T, F, R, RT}(parent, child, self, fn, rheology, ind_input, el_number)
     end
 end
 
@@ -21,7 +21,7 @@ end
 #     child::T       # i-th element of x to be added
 #     self::Int64    # equation number
 #     fn::F          # state function
-#     rheology::R 
+#     rheology::R
 
 #     function CompositeEquation(parent::Int64, child::T, self::Int64, fn::F, rheology::R, ::Val{B}) where {T, F, R, B}
 #         @assert B isa Bool
@@ -33,7 +33,7 @@ end
 #     iself_ref = Ref{Int64}(iself)
 
 #     (; branches, leafs) = c
-    
+
 #     fns_own_global, fns_own_local = get_own_functions(c)
 #     fns_branches_global,          = get_own_functions(branches)
 
@@ -51,22 +51,22 @@ end
 #     local_eqs =  add_local_equations(iparent, ilocal_childs, iself_ref, fns_own_local, leafs, Val(nlocal))
 #     # add parallel equations
 #     parallel_eqs = add_parallel_equations(global_eqs, branches, iself_ref, fns_own_global)
-    
-#     return (global_eqs..., local_eqs..., parallel_eqs...) |> superflatten 
+
+#     return (global_eqs..., local_eqs..., parallel_eqs...) |> superflatten
 # end
 @inline generate_equations(c::AbstractCompositeModel) = generate_equations(c, global_series_functions(c))
 
-@generated function generate_equations(c::AbstractCompositeModel, fns::NTuple{N, Any}) where N
-    quote
+@generated function generate_equations(c::AbstractCompositeModel, fns::NTuple{N, Any}) where {N}
+    return quote
         iparent = 0
         iself = 0
         isGlobal = Val(true)
-        el_num  = global_eltype_numbering(c)        # global element numbering (to be followed )
+        el_num = global_eltype_numbering(c)        # global element numbering (to be followed )
         eqs = Base.@ntuple $N i -> begin
             @inline
             ind_input = i
             eqs = generate_equations(c, fns[i], ind_input, isGlobal, isvolumetric(c), el_num; iparent = iparent, iself = iself)
-            iself = eqs[end].self 
+            iself = eqs[end].self
             iparent = 0
             eqs
         end
@@ -74,36 +74,36 @@ end
     end
 end
 
-function generate_equations(c::AbstractCompositeModel, fns_own_global::F, ind_input, ::Val{B}, ::Val, el_num=nothing; iparent::Int64 = 0, iself::Int64 = 0) where {F, B}
+function generate_equations(c::AbstractCompositeModel, fns_own_global::F, ind_input, ::Val{B}, ::Val, el_num = nothing; iparent::Int64 = 0, iself::Int64 = 0) where {F, B}
     iself_ref = Ref{Int64}(iself)
     (; branches, leafs) = c
     local_el = el_num[1]
-  
-    _, fns_own_local      = get_own_functions(c)
+
+    _, fns_own_local = get_own_functions(c)
     # fns_branches_global,_ = get_own_functions(branches)
 
-    nown             = 1 # length(fns_own_global)
-    nlocal           = length(fns_own_local)
-    nbranches        = length(branches)
+    nown = 1 # length(fns_own_global)
+    nlocal = length(fns_own_local)
+    nbranches = length(branches)
 
     # iglobal          = ntuple(i -> iparent + i - 1, Val(nown))
-    ilocal_childs    = ntuple(i -> iself + nown - 1 + i, Val(nlocal))
- 
+    ilocal_childs = ntuple(i -> iself + nown - 1 + i, Val(nlocal))
+
     offsets_parallel = (0, ntuple(i -> i, Val(nbranches))...)
     # offsets_parallel = (0, length.(fns_branches_global)...)
     iparallel_childs = ntuple(i -> iself + nlocal + offsets_parallel[i] + i + nown, Val(nbranches))
     # ichildren = (ilocal_childs..., iparallel_childs...)
-    
+
     # add globals
     # iself_ref[] += 1
     # global_eqs   = CompositeEquation(iparent, iparallel_childs, iself_ref[], fns_own_global, leafs, Val(false))
-    isGlobal     = Val(B)
-    global_eqs   = add_global_equations(iparent, ilocal_childs, iparallel_childs, iself_ref, fns_own_global, leafs, branches, ind_input, isGlobal, Val(1), local_el)
-    local_eqs    = add_local_equations(iparent + 1, (), iself_ref, fns_own_local, fns_own_global, leafs, Val(nlocal), local_el)
+    isGlobal = Val(B)
+    global_eqs = add_global_equations(iparent, ilocal_childs, iparallel_childs, iself_ref, fns_own_global, leafs, branches, ind_input, isGlobal, Val(1), local_el)
+    local_eqs = add_local_equations(iparent + 1, (), iself_ref, fns_own_local, fns_own_global, leafs, Val(nlocal), local_el)
 
-    iparent_new  = global_eqs.self
+    iparent_new = global_eqs.self
 
-    fn           = counterpart(fns_own_global)
+    fn = counterpart(fns_own_global)
     parallel_eqs = ntuple(Val(nbranches)) do i
         @inline
         generate_equations(branches[i], fn, 0, Val(false), isvolumetric(branches[i]), el_num[2][i]; iparent = iparent_new, iself = iself_ref[])
@@ -115,12 +115,12 @@ end
 # eliminate equations
 for fn in (:compute_pressure, :compute_volumetric_strain_rate)
     @eval begin
-        @inline generate_equations(::AbstractCompositeModel, ::typeof($fn), ::Integer, ::Val, ::Val{false}, el_num=nothing; kwargs...) = ()
+        @inline generate_equations(::AbstractCompositeModel, ::typeof($fn), ::Integer, ::Val, ::Val{false}, el_num = nothing; kwargs...) = ()
     end
 end
 @inline generate_equations(::Tuple{}; kwargs...) = ()
 
-#### 
+####
 
 fn_pairs = (
     (compute_strain_rate, compute_stress),
@@ -135,22 +135,22 @@ for pair in fn_pairs
     end
 end
 
-get_own_functions(c::NTuple{N, AbstractCompositeModel}) where N = ntuple(i -> get_own_functions(c[i]), Val(N))
-get_own_functions(c::SeriesModel)                               = get_own_functions(c, series_state_functions, global_series_state_functions, local_series_state_functions)
-get_own_functions(c::ParallelModel)                             = get_own_functions(c, parallel_state_functions, global_parallel_state_functions, local_parallel_state_functions)
+get_own_functions(c::NTuple{N, AbstractCompositeModel}) where {N} = ntuple(i -> get_own_functions(c[i]), Val(N))
+get_own_functions(c::SeriesModel) = get_own_functions(c, series_state_functions, global_series_state_functions, local_series_state_functions)
+get_own_functions(c::ParallelModel) = get_own_functions(c, parallel_state_functions, global_parallel_state_functions, local_parallel_state_functions)
 
 function get_own_functions(c::AbstractCompositeModel, fn_state::F1, fn_global::F2, fn_local::F3) where {F1, F2, F3}
-    fns_own_all    = fn_state(c.leafs)
+    fns_own_all = fn_state(c.leafs)
     fns_own_global = fn_global(fns_own_all) |> superflatten |> flatten_repeated_functions
-    fns_own_local  = fn_local(fns_own_all)
-    fns_own_global, fns_own_local
+    fns_own_local = fn_local(fns_own_all)
+    return fns_own_global, fns_own_local
 end
 
 get_own_functions(::Tuple{}) = (), ()
 # get_own_functions(::Tuple{}) = compute_strain_rate, ()
 
 # # Number the rheological elements sequantially
-# function global_el_numbering(c::NTuple{N, AbstractCompositeModel}, v=0) where N 
+# function global_el_numbering(c::NTuple{N, AbstractCompositeModel}, v=0) where N
 #     # This allocates
 #     n = ();
 #     for i=1:N
@@ -173,7 +173,7 @@ get_own_functions(::Tuple{}) = (), ()
 # end
 
 
-# function global_el_numbering(c::AbstractCompositeModel,v=0)   
+# function global_el_numbering(c::AbstractCompositeModel,v=0)
 #     num_leafs    = global_el_numbering(c.leafs,v)
 #     num_branches = global_el_numbering(c.branches,maximum(num_leafs, init=v))
 #     return num_leafs, num_branches
@@ -188,15 +188,15 @@ get_own_functions(::Tuple{}) = (), ()
     return (n1, n2)
 end
 
-@generated function global_el_numbering(::NTuple{N, AbstractRheology}, counter::Base.RefValue) where N
-    quote
+@generated function global_el_numbering(::NTuple{N, AbstractRheology}, counter::Base.RefValue) where {N}
+    return quote
         @inline
         Base.@ntuple $N i -> counter[] += 1
     end
 end
 
-@generated function global_el_numbering(c::NTuple{N, AbstractCompositeModel}, counter::Base.RefValue) where N
-    quote
+@generated function global_el_numbering(c::NTuple{N, AbstractCompositeModel}, counter::Base.RefValue) where {N}
+    return quote
         @inline
         Base.@ntuple $N i -> global_el_numbering(c[i], counter)
     end
@@ -206,21 +206,21 @@ end
 
 @inline global_eltype_numbering(c::AbstractCompositeModel) = global_eltype_numbering(c, Ref(0), Ref(0), Ref(0))
 
-@inline function global_eltype_numbering(c::AbstractCompositeModel, counter_v::Base.RefValue,counter_el::Base.RefValue,counter_pl::Base.RefValue)
+@inline function global_eltype_numbering(c::AbstractCompositeModel, counter_v::Base.RefValue, counter_el::Base.RefValue, counter_pl::Base.RefValue)
     n1 = global_eltype_numbering(c.leafs, counter_v, counter_el, counter_pl)
     n2 = global_eltype_numbering(c.branches, counter_v, counter_el, counter_pl)
     return (n1, n2)
 end
 
-@generated function global_eltype_numbering(c::NTuple{N, AbstractRheology}, counter_v::Base.RefValue, counter_el::Base.RefValue, counter_pl::Base.RefValue) where N
-    quote
+@generated function global_eltype_numbering(c::NTuple{N, AbstractRheology}, counter_v::Base.RefValue, counter_el::Base.RefValue, counter_pl::Base.RefValue) where {N}
+    return quote
         @inline
         Base.@ntuple $N i -> global_eltype_numbering(c[i], counter_v, counter_el, counter_pl)
     end
 end
 
-@generated function global_eltype_numbering(c::NTuple{N, AbstractCompositeModel}, counter_v::Base.RefValue, counter_el::Base.RefValue, counter_pl::Base.RefValue) where N
-    quote
+@generated function global_eltype_numbering(c::NTuple{N, AbstractCompositeModel}, counter_v::Base.RefValue, counter_el::Base.RefValue, counter_pl::Base.RefValue) where {N}
+    return quote
         @inline
         Base.@ntuple $N i -> global_eltype_numbering(c[i], counter_v, counter_el, counter_pl)
     end
@@ -228,71 +228,71 @@ end
 
 @inline global_eltype_numbering(::Tuple{}, ::Base.RefValue, ::Base.RefValue, ::Base.RefValue) = ()
 
-global_eltype_numbering(c::AbstractViscosity,  counter_v::Base.RefValue, counter_el::Base.RefValue, counter_pl::Base.RefValue) = counter_v[] += 1
+global_eltype_numbering(c::AbstractViscosity, counter_v::Base.RefValue, counter_el::Base.RefValue, counter_pl::Base.RefValue) = counter_v[] += 1
 global_eltype_numbering(c::AbstractElasticity, counter_v::Base.RefValue, counter_el::Base.RefValue, counter_pl::Base.RefValue) = counter_el[] += 1
 global_eltype_numbering(c::AbstractPlasticity, counter_v::Base.RefValue, counter_el::Base.RefValue, counter_pl::Base.RefValue) = counter_pl[] += 1
 
 #get_local_functions(c::NTuple{N, AbstractCompositeModel}) where N = ntuple(i -> get_own_functions(c[i]), Val(N))
 function get_local_functions(c::SeriesModel)
-    fns_own_all    = series_state_functions(c.leafs)
-    local_series_state_functions(fns_own_all)
+    fns_own_all = series_state_functions(c.leafs)
+    return local_series_state_functions(fns_own_all)
 end
 
 function get_local_functions(c::ParallelModel)
-    fns_own_all    = parallel_state_functions(c.leafs)
-    local_parallel_state_functions(fns_own_all)
+    fns_own_all = parallel_state_functions(c.leafs)
+    return local_parallel_state_functions(fns_own_all)
 end
 
-@inline has_children(::F, branch)                              where F = Val(true)
-@inline has_children(::typeof(compute_pressure), branch)               = isvolumetric(branch)
+@inline has_children(::F, branch) where {F} = Val(true)
+@inline has_children(::typeof(compute_pressure), branch) = isvolumetric(branch)
 @inline has_children(::typeof(compute_volumetric_strain_rate), branch) = isvolumetric(branch)
 
-@inline correct_children(fn::F, branch::AbstractCompositeModel, children) where F = correct_children(children, has_children(fn, branch))
-@generated function correct_children(fn::F, branch::NTuple{N,AbstractCompositeModel}, children) where {F, N} 
-    quote
+@inline correct_children(fn::F, branch::AbstractCompositeModel, children) where {F} = correct_children(children, has_children(fn, branch))
+@generated function correct_children(fn::F, branch::NTuple{N, AbstractCompositeModel}, children) where {F, N}
+    return quote
         new_children = Base.@ntuple $N i -> correct_children(children[i], has_children(fn, branch[i]))
-        return superflatten(new_children )
+        return superflatten(new_children)
     end
 end
-@inline correct_children(children, ::Val{true})  = children
-@inline correct_children(::Any,    ::Val{false}) = ()
+@inline correct_children(children, ::Val{true}) = children
+@inline correct_children(::Any, ::Val{false}) = ()
 
-@generated function add_global_equations(iparent, ilocal_childs, iparallel_childs, iself_ref, fns_own_global::NTuple{F,Any}, leafs, branches, ::Val{N}, el_number) where {F,N}
-    quote
-        Base.@ntuple $N i-> begin
+@generated function add_global_equations(iparent, ilocal_childs, iparallel_childs, iself_ref, fns_own_global::NTuple{F, Any}, leafs, branches, ::Val{N}, el_number) where {F, N}
+    return quote
+        Base.@ntuple $N i -> begin
             @inline
-            iself_ref[]       += 1 
+            iself_ref[] += 1
             corrected_children = correct_children(fns_own_global[i], branches, iparallel_childs)
-            children           = (ilocal_childs..., corrected_children...) .+ (i - 1)
+            children = (ilocal_childs..., corrected_children...) .+ (i - 1)
             CompositeEquation(iparent, children, iself_ref[], fns_own_global[i], leafs, Val(true), el_number)
         end
     end
 end
 
-@generated function add_global_equations(iparent, ilocal_childs, iparallel_childs, iself_ref, fns_own_global::F, leafs, branches, ::Val{N}, el_number) where {F,N}
-    quote
-        Base.@ntuple $N i-> begin
+@generated function add_global_equations(iparent, ilocal_childs, iparallel_childs, iself_ref, fns_own_global::F, leafs, branches, ::Val{N}, el_number) where {F, N}
+    return quote
+        Base.@ntuple $N i -> begin
             @inline
-            iself_ref[]       += 1
+            iself_ref[] += 1
             corrected_children = correct_children(fns_own_global[i], branches, iparallel_childs)
-            children           = (ilocal_childs..., corrected_children...) .+ (i - 1)
+            children = (ilocal_childs..., corrected_children...) .+ (i - 1)
             CompositeEquation(iparent, children, iself_ref[], fns_own_global, leafs, Val(true), el_number)
         end
     end
 end
 
-function add_global_equations(iparent, ilocal_childs, iparallel_childs, iself_ref, fns_own_global::F, leafs, branches, ind_input, ::Val{B}, ::Val{1}, el_number) where {F,B}
+function add_global_equations(iparent, ilocal_childs, iparallel_childs, iself_ref, fns_own_global::F, leafs, branches, ind_input, ::Val{B}, ::Val{1}, el_number) where {F, B}
     @inline
-    iself_ref[]       += 1
+    iself_ref[] += 1
     corrected_children = correct_children(fns_own_global, branches, iparallel_childs)
-    children           = (ilocal_childs..., corrected_children...)
+    children = (ilocal_childs..., corrected_children...)
     #@show children, corrected_children
-    CompositeEquation(iparent, children, iself_ref[], fns_own_global, leafs, ind_input, Val(B), el_number)
+    return CompositeEquation(iparent, children, iself_ref[], fns_own_global, leafs, ind_input, Val(B), el_number)
 end
 
-@generated function add_local_equations(iparent, ilocal_childs, iself_ref, fns_own_local::F1, ::F2, leafs, ::Val{N}, el_number) where {N, F1, F2} 
-    quote
-        Base.@ntuple $N i-> begin
+@generated function add_local_equations(iparent, ilocal_childs, iself_ref, fns_own_local::F1, ::F2, leafs, ::Val{N}, el_number) where {N, F1, F2}
+    return quote
+        Base.@ntuple $N i -> begin
             @inline
             iself_ref[] += 1
             CompositeEquation(iparent, ilocal_childs, iself_ref[], fns_own_local[i], leafs, 0, Val(false), el_number)
@@ -303,12 +303,12 @@ end
 add_local_equations(::Any, ::Any, ::Any, ::F, ::F, ::Any, ::Any, ::Any) where {F} = ()
 
 
-@generated function add_parallel_equations(global_eqs::NTuple{N1,Any}, branches::NTuple{N2, AbstractCompositeModel}, iself_ref, fns_own_global::NTuple{N1,Any}) where {N1, N2}
-    quote
+@generated function add_parallel_equations(global_eqs::NTuple{N1, Any}, branches::NTuple{N2, AbstractCompositeModel}, iself_ref, fns_own_global::NTuple{N1, Any}) where {N1, N2}
+    return quote
         Base.@ntuple $N1 j -> begin
             @inline
             iparent_new = global_eqs[j].self
-            fn          = counterpart(fns_own_global[j])
+            fn = counterpart(fns_own_global[j])
             Base.@ntuple $N2 i -> begin
                 @inline
                 generate_equations(branches[i], fn, isvolumetric(branches[i]); iparent = iparent_new, iself = iself_ref[])
@@ -317,24 +317,24 @@ add_local_equations(::Any, ::Any, ::Any, ::F, ::F, ::Any, ::Any, ::Any) where {F
     end
 end
 
-@generated function generate_args_template(eqs::NTuple{N, CompositeEquation}) where N 
-    quote
-        Base.@ntuple $N i -> differentiable_kwargs(eqs[i].fn) 
+@generated function generate_args_template(eqs::NTuple{N, CompositeEquation}) where {N}
+    return quote
+        Base.@ntuple $N i -> differentiable_kwargs(eqs[i].fn)
     end
 end
 
-@generated function generate_args_template(eqs::NTuple{N, Any}, x::SVector{N}, others::NamedTuple) where N
-    quote
+@generated function generate_args_template(eqs::NTuple{N, Any}, x::SVector{N}, others::NamedTuple) where {N}
+    return quote
         args_template = generate_args_template(eqs)
         Base.@ntuple $N i -> begin
             @inline
-            name =  keys(args_template[i])
+            name = keys(args_template[i])
             merge(NamedTuple{name}(x[i]), others)
         end
     end
 end
 
-# extracts local kwargs when the args is a tuple, and it is listed 
+# extracts local kwargs when the args is a tuple, and it is listed
 # julia> others      = (; dt = 1e10, τ0 = (1.1, 3.0), d = (4, 2))
 # julia> extract_local_kwargs(others, (:τ0,), 2)
 # (dt = 1.0e10, τ0 = 3.0, d = 4)
@@ -342,13 +342,13 @@ end
 # (dt = 1.0e10, τ0 = 1.1, d = 2)
 # julia> extract_local_kwargs(others, (:τ0,:d), 2)
 # (dt = 1.0e10, τ0 = 3.0, d = 2)
-function extract_local_kwargs(others::NamedTuple, keys_hist::NTuple{M,Symbol}, n::Int64) where {M}
+function extract_local_kwargs(others::NamedTuple, keys_hist::NTuple{M, Symbol}, n::Int64) where {M}
     vals_new = extract_local_kwargs(keys(others), values(others), keys_hist, n)
     return NamedTuple{keys(others)}(vals_new)
 end
 
-@generated function extract_local_kwargs(keys_args::NTuple{N,Symbol}, vals_args::NTuple{N,Union{Float64, Tuple}}, keys_hist::NTuple{M,Symbol}, n::Int64) where {N,M}
-    quote 
+@generated function extract_local_kwargs(keys_args::NTuple{N, Symbol}, vals_args::NTuple{N, Union{Float64, Tuple}}, keys_hist::NTuple{M, Symbol}, n::Int64) where {N, M}
+    return quote
         @inline
         Base.@ntuple $N i -> @inbounds _extract_local_kwargs(vals_args[i], keys_args[i], keys_hist, n)
     end
@@ -358,13 +358,13 @@ Base.@propagate_inbounds @inline _extract_local_kwargs(vals_args::Tuple, name, k
 
 @inline _extract_local_kwargs(vals_args, ::Any, ::Any, ::Any) = vals_args
 
-@inline function evaluate_state_function(eq::CompositeEquation, args, others) 
+@inline function evaluate_state_function(eq::CompositeEquation, args, others)
     (; fn, rheology, el_number) = eq
-    evaluate_state_function(fn, rheology, args, others, el_number)
+    return evaluate_state_function(fn, rheology, args, others, el_number)
 end
 
-@generated function evaluate_state_function(fn::F, rheology::NTuple{N, AbstractRheology}, args, others, el_number)  where {N,F}
-    quote
+@generated function evaluate_state_function(fn::F, rheology::NTuple{N, AbstractRheology}, args, others, el_number) where {N, F}
+    return quote
         @inline
         vals = Base.@ntuple $N i -> begin
             keys_hist = history_kwargs(rheology[i])
@@ -376,17 +376,17 @@ end
     end
 end
 
-evaluate_state_function(fn::F, rheology::Tuple{}, args, others) where {F} = 0e0
+evaluate_state_function(fn::F, rheology::Tuple{}, args, others) where {F} = 0.0e0
 
 # @inline evaluate_state_functions(eqs::NTuple{N, CompositeEquation}, args) where N = promote(ntuple(i -> evaluate_state_function(eqs[i], args[i]), Val(N))...)
-@generated function evaluate_state_functions(eqs::NTuple{N, CompositeEquation}, args, others) where N 
-    quote
+@generated function evaluate_state_functions(eqs::NTuple{N, CompositeEquation}, args, others) where {N}
+    return quote
         @inline
         Base.@ntuple $N i -> evaluate_state_function(eqs[i], args[i], others)
     end
 end
 
-add_child(::SVector, ::Tuple{}) = 0e0
+add_child(::SVector, ::Tuple{}) = 0.0e0
 # @generated function add_child(x::SVector{M}, child::NTuple{N}) where {M, N}
 #     quote
 #         @inline
@@ -399,43 +399,43 @@ add_child(::SVector, ::Tuple{}) = 0e0
 # end
 
 @generated function add_child(x::SVector{M}, child::NTuple{N}) where {M, N}
-    quote
+    return quote
         @inline
         v = Base.@ntuple $N i -> begin
-            x[child[i]] 
+            x[child[i]]
         end
         sum(v)
     end
 end
 
 @generated function add_children(residual::NTuple{N, Any}, x::SVector{N}, eqs::NTuple{N, CompositeEquation}) where {N}
-    quote
+    return quote
         @inline
         Base.@ntuple $N i -> residual[i] + add_child(x, eqs[i].child)
     end
 end
 
 function add_children(residual::Number, x::SVector, eq::CompositeEquation)
-    residual + add_child(x, eq.child)
+    return residual + add_child(x, eq.child)
 end
 
 # if global, subtract the variables
-@inline subtract_parent( ::SVector, eq::CompositeEquation{true} ,         vars) = vars[eq.ind_input]
+@inline subtract_parent(::SVector, eq::CompositeEquation{true}, vars) = vars[eq.ind_input]
 @inline subtract_parent(x::SVector, eq::CompositeEquation{false}, ::NamedTuple) = x[eq.parent]
-@generated function subtract_parent(residual::NTuple{N,Any}, x, eqs::NTuple{N, CompositeEquation}, vars) where {N} 
-    quote
+@generated function subtract_parent(residual::NTuple{N, Any}, x, eqs::NTuple{N, CompositeEquation}, vars) where {N}
+    return quote
         @inline
         Base.@ntuple $N i -> residual[i] - subtract_parent(x, eqs[i], vars)
     end
 end
 
 function subtract_parent(residual::Number, x::SVector, eq::CompositeEquation, vars)
-    residual - subtract_parent(x, eq, vars)
+    return residual - subtract_parent(x, eq, vars)
 end
-    
-function compute_residual(c, x::SVector{N,T}, vars, others) where {N,T}
-    
-    eqs      = generate_equations(c)
+
+function compute_residual(c, x::SVector{N, T}, vars, others) where {N, T}
+
+    eqs = generate_equations(c)
     @assert length(eqs) == length(x)
     args_all = generate_args_template(eqs, x, others)
 
@@ -443,20 +443,20 @@ function compute_residual(c, x::SVector{N,T}, vars, others) where {N,T}
     residual = evaluate_state_functions(eqs, args_all, others)
     residual = add_children(residual, x, eqs)
     residual = subtract_parent(residual, x, eqs, vars)
-    
+
     return SA[residual...]
 end
 
-function compute_residual(c, x::SVector{N,T}, vars, others, ind::Int64, ipartial::Int64) where {N,T}
-    
-    eqs      = generate_equations(c)
+function compute_residual(c, x::SVector{N, T}, vars, others, ind::Int64, ipartial::Int64) where {N, T}
+
+    eqs = generate_equations(c)
     args_all = generate_args_template(eqs, x, others)[1]
 
     # # evaluates the self-components of the residual
-    eq       = eqs[1]
+    eq = eqs[1]
     residual = evaluate_state_function(eq, args_all, others)
     residual = add_children(residual, x, eq)
     residual = subtract_parent(residual, x, eq, vars)
-    
+
     return residual
 end

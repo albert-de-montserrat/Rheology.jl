@@ -12,12 +12,12 @@ include("equations.jl")
 include("others.jl")
 include("../src/print_rheology.jl")
 
-function bt_line_search(Δx, J, x, r, composite, vars, others; α=1.0, ρ=0.5, c=1e-4, α_min=1e-8)
+function bt_line_search(Δx, J, x, r, composite, vars, others; α = 1.0, ρ = 0.5, c = 1.0e-4, α_min = 1.0e-8)
 
     perturbed_x = @. x - α * Δx
     perturbed_r = compute_residual(composite, perturbed_x, vars, others)
 
-    while sqrt(sum(perturbed_r.^2)) > sqrt(sum((r + (c * α * (J * Δx))).^2))
+    while sqrt(sum(perturbed_r .^ 2)) > sqrt(sum((r + (c * α * (J * Δx))) .^ 2))
         α *= ρ
         if α < α_min
             α = α_min
@@ -30,52 +30,52 @@ function bt_line_search(Δx, J, x, r, composite, vars, others; α=1.0, ρ=0.5, c
 end
 
 function solve(c, x, vars, others)
-    tol     = 1e-9
-    itermax = 10e3
-    it      = 0
-    er      = Inf
+    tol = 1.0e-9
+    itermax = 10.0e3
+    it = 0
+    er = Inf
     # Δx      = similar(x)
     local α
     while er > tol
         it += 1
-        r  = compute_residual(c, x, vars, others)
-        J  = ForwardDiff.jacobian(y -> compute_residual(c, y, vars, others), x)
+        r = compute_residual(c, x, vars, others)
+        J = ForwardDiff.jacobian(y -> compute_residual(c, y, vars, others), x)
         Δx = J \ r
-        α  = bt_line_search(Δx, J, x, r, c, vars, others)
+        α = bt_line_search(Δx, J, x, r, c, vars, others)
         x -= α .* Δx
 
-        er = norm(iszero(xᵢ) ? 0e0 : Δxᵢ/abs(xᵢ) for (Δxᵢ, xᵢ) in zip(Δx, x)) # norm(r)
+        er = norm(iszero(xᵢ) ? 0.0e0 : Δxᵢ / abs(xᵢ) for (Δxᵢ, xᵢ) in zip(Δx, x)) # norm(r)
 
         it > itermax && break
     end
-    println("Iterations: $it, Error: $er, α = $α" )
-    x
+    println("Iterations: $it, Error: $er, α = $α")
+    return x
 end
 
 
-viscous1    = LinearViscosity(5e19)
-viscous2    = LinearViscosity(1e20)
-viscousbulk = BulkViscosity(1e18)
-powerlaw    = PowerLawViscosity(5e19, 3)
-drucker     = DruckerPrager(1e6, 10.0, 0.0)
-elastic     = Elasticity(1e10, 1e12)
-elasticbulk = BulkElasticity(1e10)
-elasticinc  = IncompressibleElasticity(1e10)
+viscous1 = LinearViscosity(5.0e19)
+viscous2 = LinearViscosity(1.0e20)
+viscousbulk = BulkViscosity(1.0e18)
+powerlaw = PowerLawViscosity(5.0e19, 3)
+drucker = DruckerPrager(1.0e6, 10.0, 0.0)
+elastic = Elasticity(1.0e10, 1.0e12)
+elasticbulk = BulkElasticity(1.0e10)
+elasticinc = IncompressibleElasticity(1.0e10)
 
-LTP         = LTPViscosity(6.2e-13, 76, 1.8e9, 3.4e9)
-diffusion   = DiffusionCreep(1, 1, 1, 1.5e-3, 1, 1, 1)
+LTP = LTPViscosity(6.2e-13, 76, 1.8e9, 3.4e9)
+diffusion = DiffusionCreep(1, 1, 1, 1.5e-3, 1, 1, 1)
 dislocation = DislocationCreep(3.5, 1, 1.1e-16, 1, 1, 1)
 
 c, x, vars, args, others = let
     # elastic - viscous -- parallel
-    #                         |  
+    #                         |
     #                viscous --- viscous
-    s1     = SeriesModel(viscous1, viscous2)
-    p      = ParallelModel(viscous1, viscous2)
-    c      = SeriesModel(elastic, viscous1, p)
-    vars   = (; ε = 1e-15, θ = 1e-20)      # input variables (constant)
-    args   = (; τ = 1e3,   P = 1e6) # guess variables (we solve for these, differentiable)
-    others = (; dt = 1e10)       # other non-differentiable variables needed to evaluate the state functions
+    s1 = SeriesModel(viscous1, viscous2)
+    p = ParallelModel(viscous1, viscous2)
+    c = SeriesModel(elastic, viscous1, p)
+    vars = (; ε = 1.0e-15, θ = 1.0e-20)      # input variables (constant)
+    args = (; τ = 1.0e3, P = 1.0e6) # guess variables (we solve for these, differentiable)
+    others = (; dt = 1.0e10)       # other non-differentiable variables needed to evaluate the state functions
 
     x = SA[
         values(args)..., # global guess(es), solving for these
@@ -87,18 +87,18 @@ end
 # eqs = generate_equations(c)
 # r   = compute_residual(c, x, vars, others)
 # J   = ForwardDiff.jacobian(y -> compute_residual(c, y, vars, others), x)
-       
+
 # eqs = generate_equations(c)
 # eqs[3].parent
 
 # 1
 
 c, x, vars, args, others = let
-    # elastic - viscous 
-    c      = SeriesModel(elastic, viscous1)
-    vars   = (; ε = 1e-15, θ = 1e-20) # input variables (constant)
-    args   = (; τ = 1e2, P = 1e6)     # guess variables (we solve for these, differentiable)
-    others = (; dt = 1e10)            # other non-differentiable variables needed to evaluate the state functions
+    # elastic - viscous
+    c = SeriesModel(elastic, viscous1)
+    vars = (; ε = 1.0e-15, θ = 1.0e-20) # input variables (constant)
+    args = (; τ = 1.0e2, P = 1.0e6)     # guess variables (we solve for these, differentiable)
+    others = (; dt = 1.0e10)            # other non-differentiable variables needed to evaluate the state functions
 
     x = SA[
         values(args)..., # global guess(es), solving for these
@@ -111,15 +111,15 @@ end
 
 c, x, vars, args, others = let
     # viscous -- parallel
-    #               |  
-    #      viscous --- viscous  
-    #         |  
+    #               |
+    #      viscous --- viscous
+    #         |
     #      viscous
-    s1     = SeriesModel(viscous1, viscous2)
-    p      = ParallelModel(s1, viscous2)
-    c      = SeriesModel(viscous1, p)
-    vars   = (; ε = 1e-15) # input variables (constant)
-    args   = (; τ = 1e2) # guess variables (we solve for these, differentiable)
+    s1 = SeriesModel(viscous1, viscous2)
+    p = ParallelModel(s1, viscous2)
+    c = SeriesModel(viscous1, p)
+    vars = (; ε = 1.0e-15) # input variables (constant)
+    args = (; τ = 1.0e2) # guess variables (we solve for these, differentiable)
     others = (;)       # other non-differentiable variables needed to evaluate the state functions
 
     x = SA[
@@ -133,12 +133,12 @@ end
 
 c, x, vars, args, others = let
     # viscous -- parallel
-    #               |  
-    #      viscous --- viscous  
-    p      = ParallelModel(viscous1, viscous2)
-    c      = SeriesModel(viscous1, p)
-    vars   = (; ε = 1e-15) # input variables (constant)
-    args   = (; τ = 1e2) # guess variables (we solve for these, differentiable)
+    #               |
+    #      viscous --- viscous
+    p = ParallelModel(viscous1, viscous2)
+    c = SeriesModel(viscous1, p)
+    vars = (; ε = 1.0e-15) # input variables (constant)
+    args = (; τ = 1.0e2) # guess variables (we solve for these, differentiable)
     others = (;)       # other non-differentiable variables needed to evaluate the state functions
 
     x = SA[
@@ -152,15 +152,15 @@ end
 
 c, x, vars, args, others = let
     # viscous -- parallel
-    #               |  
-    #      viscous --- viscous  
-    #         |  
+    #               |
+    #      viscous --- viscous
+    #         |
     #      viscous
-    s1     = SeriesModel(viscous1, viscous2)
-    p      = ParallelModel(s1, viscous2)
-    c      = SeriesModel(viscous1, p)
-    vars   = (; ε = 1e-15) # input variables (constant)
-    args   = (; τ = 1e2) # guess variables (we solve for these, differentiable)
+    s1 = SeriesModel(viscous1, viscous2)
+    p = ParallelModel(s1, viscous2)
+    c = SeriesModel(viscous1, p)
+    vars = (; ε = 1.0e-15) # input variables (constant)
+    args = (; τ = 1.0e2) # guess variables (we solve for these, differentiable)
     others = (;)       # other non-differentiable variables needed to evaluate the state functions
 
     x = SA[
@@ -174,15 +174,15 @@ end
 
 c, x, vars, args, others = let
     #           parallel
-    #               |  
-    #      viscous --- viscous  
-    #         |  
+    #               |
+    #      viscous --- viscous
+    #         |
     #      viscous
-    s1     = SeriesModel(viscous1, viscous2)
-    c      = ParallelModel(s1, viscous2)
+    s1 = SeriesModel(viscous1, viscous2)
+    c = ParallelModel(s1, viscous2)
 
-    vars   = (; ε = 1e-15) # input variables (constant)
-    args   = (; τ = 1e2) # guess variables (we solve for these, differentiable)
+    vars = (; ε = 1.0e-15) # input variables (constant)
+    args = (; τ = 1.0e2) # guess variables (we solve for these, differentiable)
     others = (;)       # other non-differentiable variables needed to evaluate the state functions
 
     x = SA[
@@ -195,15 +195,15 @@ end
 
 c, x, vars, args, others = let
     #           parallel
-    #               |  
-    #      viscous --- viscous  
-    #         |  
+    #               |
+    #      viscous --- viscous
+    #         |
     #      viscous
-    s1     = SeriesModel(viscous1, viscous2)
-    c      = ParallelModel(viscous1, viscous2) |> SeriesModel
+    s1 = SeriesModel(viscous1, viscous2)
+    c = ParallelModel(viscous1, viscous2) |> SeriesModel
 
-    vars   = (; ε = 1e-15) # input variables (constant)
-    args   = (; τ = 1e2) # guess variables (we solve for these, differentiable)
+    vars = (; ε = 1.0e-15) # input variables (constant)
+    args = (; τ = 1.0e2) # guess variables (we solve for these, differentiable)
     others = (;)       # other non-differentiable variables needed to evaluate the state functions
 
     x = SA[
@@ -216,16 +216,16 @@ end
 
 c, x, vars, args, others = let
     # viscous -- parallel    --      parallel
-    #               |                   | 
-    #      viscous --- viscous  viscous --- viscous  
-    #         |  
+    #               |                   |
+    #      viscous --- viscous  viscous --- viscous
+    #         |
     #      viscous
-    s1     = SeriesModel(viscous1, viscous2)
-    p      = ParallelModel(s1, viscous2)
-    p1     = ParallelModel(viscous1, viscous2)
-    c      = SeriesModel(viscous1, p, p1)
-    vars   = (; ε = 1e-15) # input variables (constant)
-    args   = (; τ = 1e2) # guess variables (we solve for these, differentiable)
+    s1 = SeriesModel(viscous1, viscous2)
+    p = ParallelModel(s1, viscous2)
+    p1 = ParallelModel(viscous1, viscous2)
+    c = SeriesModel(viscous1, p, p1)
+    vars = (; ε = 1.0e-15) # input variables (constant)
+    args = (; τ = 1.0e2) # guess variables (we solve for these, differentiable)
     others = (;)       # other non-differentiable variables needed to evaluate the state functions
 
     x = SA[
@@ -417,15 +417,15 @@ end
 
 c, x, vars, args, others = let
     # Burger's model
-    #      elastic - viscous -    parallel    
-    #                                |       
+    #      elastic - viscous -    parallel
+    #                                |
     #                   elastic --- viscous
 
-    p      = ParallelModel(viscous2, elastic)
-    c      = SeriesModel(viscous1, elastic, p)
-    vars   = (; ε = 1e-15, θ = 1e-20)       # input variables (constant)
-    args   = (; τ = 1e3,   P = 1e6)         # guess variables (we solve for these, differentiable)
-    others = (; dt = 1e10, τ0 = (1.0,2.0) )       # other non-differentiable variables needed to evaluate the state functions
+    p = ParallelModel(viscous2, elastic)
+    c = SeriesModel(viscous1, elastic, p)
+    vars = (; ε = 1.0e-15, θ = 1.0e-20)       # input variables (constant)
+    args = (; τ = 1.0e3, P = 1.0e6)         # guess variables (we solve for these, differentiable)
+    others = (; dt = 1.0e10, τ0 = (1.0, 2.0))       # other non-differentiable variables needed to evaluate the state functions
 
     x = SA[
         values(args)..., # global guess(es), solving for these
@@ -438,57 +438,56 @@ end
 
 
 function solve(c, x, vars, others)
-    tol     = 1e-9
-    itermax = 10e3
-    it      = 0
-    er      = Inf
+    tol = 1.0e-9
+    itermax = 10.0e3
+    it = 0
+    er = Inf
     # Δx      = similar(x)
     local α
     while er > tol
         it += 1
-        r  = compute_residual(c, x, vars, others)
-        J  = ForwardDiff.jacobian(y -> compute_residual(c, y, vars, others), x)
-        
+        r = compute_residual(c, x, vars, others)
+        J = ForwardDiff.jacobian(y -> compute_residual(c, y, vars, others), x)
+
         # update Δx
         Δx = J \ r
 
-        α  = bt_line_search(Δx, J, x, r, c, vars, others)
+        α = bt_line_search(Δx, J, x, r, c, vars, others)
         x -= α .* Δx
 
-        er = norm(iszero(xᵢ) ? 0e0 : Δxᵢ/abs(xᵢ) for (Δxᵢ, xᵢ) in zip(Δx, x)) # norm(r)
+        er = norm(iszero(xᵢ) ? 0.0e0 : Δxᵢ / abs(xᵢ) for (Δxᵢ, xᵢ) in zip(Δx, x)) # norm(r)
         it > itermax && break
     end
-    println("Iterations: $it, Error: $er, α = $α" )
-    x
+    println("Iterations: $it, Error: $er, α = $α")
+    return x
 end
 
 function main(c, x, vars, args, others)
-    ε = exp10.(LinRange(log10(1e-15), log10(1e-8), 50))
+    ε = exp10.(LinRange(log10(1.0e-15), log10(1.0e-8), 50))
     τ = similar(ε)
     x0 = copy(x)
     # args   = (; τ = 1e10)   # guess variables (we solve for these, differentiable)
     # others = (; dt = 1e10) # other non-differentiable variables needed to evaluate the state functions
     for i in eachindex(ε)
         # vars = (; ε = ε[i]) # input variables (constant)
-        vars = (; ε = ε[i], θ = 1e-20) # input variables (constant)
+        vars = (; ε = ε[i], θ = 1.0e-20) # input variables (constant)
         sol = solve(c, x, vars, others)
         x = x0
         τ[i] = sol[1]
     end
 
-    f,ax,h = scatterlines(log10.(ε), log10.(τ))
+    f, ax, h = scatterlines(log10.(ε), log10.(τ))
     # f,ax,h = scatterlines(ε, τ)
     # ax.xlabel = L"\dot\varepsilon_{II}"
     # ax.ylabel = L"\tau_{II}"
-    f
+    return f
 end
 
-       
 
 #main(c, x, vars, args, others)
-eqs     = generate_equations(c)
+eqs = generate_equations(c)
 
-r       = compute_residual(c, x, vars, others)
+r = compute_residual(c, x, vars, others)
 
 
 #J  = ForwardDiff.jacobian(y -> compute_residual(c, y, vars, others), x)

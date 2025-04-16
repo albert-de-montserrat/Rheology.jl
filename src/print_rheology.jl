@@ -2,7 +2,7 @@
 import Base.show
 
 # returns a matrix with strings in the right order
-function print_rheology_matrix(v::Tuple, el_num=nothing, digits=1)
+function print_rheology_matrix(v::Tuple, el_num = nothing, digits = 1)
 
     n = 40
     A = Matrix{String}(undef, n, n)
@@ -30,7 +30,7 @@ function print_rheology_matrix(v::Tuple, el_num=nothing, digits=1)
     end
     for i in eachindex(A)
         if A[i] == ""
-            A[i] = print_rheology_matrix("",digits)[1]
+            A[i] = print_rheology_matrix("", digits)[1]
         end
     end
 
@@ -40,21 +40,21 @@ function print_rheology_matrix(v::Tuple, el_num=nothing, digits=1)
 end
 
 
-function print_rheology_matrix(v::ParallelModel, el_num0=nothing, digits=1)
+function print_rheology_matrix(v::ParallelModel, el_num0 = nothing, digits = 1)
     n = 40
     A = Matrix{String}(undef, n, n)
     elements = superflatten((v.leafs, v.branches))
     if isnothing(el_num0)
-        el_num0   = global_eltype_numbering(v)
-        if maximum(superflatten(el_num0))>9
-            digits=2
+        el_num0 = global_eltype_numbering(v)
+        if maximum(superflatten(el_num0)) > 9
+            digits = 2
         end
     end
-    el_num    = (el_num0[1]...,el_num0[2]...,)
+    el_num = (el_num0[1]..., el_num0[2]...)
     i, j = 1, 1
     i_vec = Int64[]
     for entry in eachindex(elements)
-        out = print_rheology_matrix(elements[entry],el_num[entry], digits)
+        out = print_rheology_matrix(elements[entry], el_num[entry], digits)
         si = size(out)
         if prod(si) == 1
             push!(i_vec, i)
@@ -91,11 +91,11 @@ function print_rheology_matrix(v::ParallelModel, el_num0=nothing, digits=1)
         if any(in.(i_vec, i))
             #str_local = remove_colors_string(B[i])
             str_local = B[i]
-            
+
             str_local = cpad(str_local, nel, "-")
             #str_local = B[i][1:5]*str_local*B[i][end-4:end]
             B[i] = "|" * str_local * "|"
-            
+
         else
             B[i] = cpad(B[i], nel, " ")
             B[i] = "|" * B[i] * "|"
@@ -105,7 +105,7 @@ function print_rheology_matrix(v::ParallelModel, el_num0=nothing, digits=1)
     return B
 end
 
-length_str_no_colors(str) = textwidth(remove_colors_string.(str)) + 1*6 + 2
+length_str_no_colors(str) = textwidth(remove_colors_string.(str)) + 1 * 6 + 2
 
 function remove_colors_string(str::String)
     str = replace(str, r"\e\[[0-9;]*m" => "")
@@ -124,17 +124,17 @@ function create_string_vec(A)
     return B
 end
 
-function print_rheology_matrix(v::SeriesModel, el_num0=nothing, digits=1)
+function print_rheology_matrix(v::SeriesModel, el_num0 = nothing, digits = 1)
     n = 40
     A = Matrix{String}(undef, n, n)
     elements = superflatten((v.leafs, v.branches))
     if isnothing(el_num0)
-        el_num0   = global_eltype_numbering(v)
-        if maximum(superflatten(el_num0))>9
-            digits=2
+        el_num0 = global_eltype_numbering(v)
+        if maximum(superflatten(el_num0)) > 9
+            digits = 2
         end
     end
-    el_num    = (el_num0[1]...,el_num0[2]...,)
+    el_num = (el_num0[1]..., el_num0[2]...)
     i, j, i_max = 1, 0, 1
     for entry in eachindex(elements)
         out = print_rheology_matrix(elements[entry], el_num[entry], digits)
@@ -163,7 +163,7 @@ function print_rheology_matrix(v::SeriesModel, el_num0=nothing, digits=1)
 
     for i in eachindex(A)
         if A[i] == ""
-            A[i] = print_rheology_matrix("",digits)[1]
+            A[i] = print_rheology_matrix("", digits)[1]
         end
     end
 
@@ -179,17 +179,17 @@ end
 #           \e[34m - blue (for compressible elements)
 #           \e[39m - default
 
-print_rheology_matrix(v::String,digits=1)                      = ["\e[39m  $(emptysuperscript(digits))       \e[39m"]
-print_rheology_matrix(v::AbstractViscosity,n=1, digits=1)      = ["\e[39m--⟦▪̲̅▫̲̅▫̲̅▫̲̅$(superscript(n,digits))--\e[39m"]
-print_rheology_matrix(v::AbstractRheology,n=nothing, digits=1) = ["\e[39m--?????$(superscript(n,digits))--\e[39m"]
-function print_rheology_matrix(v::AbstractElasticity, n=nothing, digits=1) 
+print_rheology_matrix(v::String, digits = 1) = ["\e[39m  $(emptysuperscript(digits))       \e[39m"]
+print_rheology_matrix(v::AbstractViscosity, n = 1, digits = 1) = ["\e[39m--⟦▪̲̅▫̲̅▫̲̅▫̲̅$(superscript(n, digits))--\e[39m"]
+print_rheology_matrix(v::AbstractRheology, n = nothing, digits = 1) = ["\e[39m--?????$(superscript(n, digits))--\e[39m"]
+function print_rheology_matrix(v::AbstractElasticity, n = nothing, digits = 1)
     if _isvolumetric(v)
         return ["\e[34m--/\\/\\/$(superscript(n, digits))--\e[39m"]
     else
         return ["\e[39m--/\\/\\/$(superscript(n, digits))--\e[39m"]
     end
 end
-print_rheology_matrix(v::AbstractPlasticity, n=nothing, digits=1) = ["\e[39m--▬▬▬__$(superscript(n,digits))--\e[39m"]
+print_rheology_matrix(v::AbstractPlasticity, n = nothing, digits = 1) = ["\e[39m--▬▬▬__$(superscript(n, digits))--\e[39m"]
 
 function create_rheology_string(str, rheo_Parallel::ParallelModel)
     rheology = rheo_Parallel.elements
@@ -281,21 +281,21 @@ end
 """
 Creates a superscript string for the given integer.
 """
-function superscript(n, digits=1)   
+function superscript(n, digits = 1)
     str = "$(n[1])"
-    if n[1]<10 && digits==2
+    if n[1] < 10 && digits == 2
         str = "0" * str
     end
-    str = replace(str, "0" => "⁰","1" => "¹","2" => "²","3" => "³","4" => "⁴","5" => "⁵","6" => "⁶","7" => "⁷","8" => "⁸","9" => "⁹")    
-    
+    str = replace(str, "0" => "⁰", "1" => "¹", "2" => "²", "3" => "³", "4" => "⁴", "5" => "⁵", "6" => "⁶", "7" => "⁷", "8" => "⁸", "9" => "⁹")
+
     return str
 end
 
-superscript(n::Nothing, digits=1) = ""
-function emptysuperscript(digits=1)
-    if digits==1
+superscript(n::Nothing, digits = 1) = ""
+function emptysuperscript(digits = 1)
+    if digits == 1
         str = " "
-    elseif digits==2
+    elseif digits == 2
         str = "  "
     end
     return str
@@ -305,12 +305,12 @@ end
 # Print the individual rheological elements in the REPL
 function Base.show(io::IO, c::SeriesModel)
     str = print_rheology_matrix(c)
-    println.(io,str)
+    println.(io, str)
     return nothing
 end
 
 function Base.show(io::IO, c::ParallelModel)
     str = print_rheology_matrix(c)
-    println.(io,str)
+    println.(io, str)
     return nothing
 end
