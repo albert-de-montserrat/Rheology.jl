@@ -366,26 +366,31 @@ end
     end
 end
 
-@inline function evaluate_state_function(eq::CompositeEquation, args) 
-    (; fn, rheology) = eq
-    evaluate_state_function(fn, rheology, args)
+@inline function evaluate_state_function(eq::CompositeEquation, args, others) 
+    (; fn, rheology, el_number) = eq
+    evaluate_state_function(fn, rheology, args, others, el_number)
 end
 
-@generated function evaluate_state_function(fn::F, rheology::NTuple{N, AbstractRheology}, args)  where {N,F}
+@generated function evaluate_state_function(fn::F, rheology::NTuple{N, AbstractRheology}, args, others, el_number)  where {N,F}
     quote
         @inline
-        vals = Base.@ntuple $N i -> fn(rheology[i], args)
+        vals = Base.@ntuple $N i -> begin
+            keys_hist = history_kwargs(rheology[i])
+            args_local = extract_local_kwargs(others, keys_hist, el_number[i])
+            args_combined = merge(args, args_local)
+            fn(rheology[i], args_combined)
+        end
         sum(vals)
     end
 end
 
-evaluate_state_function(fn::F, rheology::Tuple{}, args) where {F} = 0e0
+evaluate_state_function(fn::F, rheology::Tuple{}, args, others) where {F} = 0e0
 
 # @inline evaluate_state_functions(eqs::NTuple{N, CompositeEquation}, args) where N = promote(ntuple(i -> evaluate_state_function(eqs[i], args[i]), Val(N))...)
-@generated function evaluate_state_functions(eqs::NTuple{N, CompositeEquation}, args) where N 
+@generated function evaluate_state_functions(eqs::NTuple{N, CompositeEquation}, args, others) where N 
     quote
         @inline
-        Base.@ntuple $N i -> evaluate_state_function(eqs[i], args[i])
+        Base.@ntuple $N i -> evaluate_state_function(eqs[i], args[i], others)
     end
 end
 
@@ -443,7 +448,7 @@ function compute_residual(c, x::SVector{N,T}, vars, others) where {N,T}
     args_all = generate_args_template(eqs, x, others)
 
     # # evaluates the self-components of the residual
-    residual = evaluate_state_functions(eqs, args_all)
+    residual = evaluate_state_functions(eqs, args_all, others)
     residual = add_children(residual, x, eqs)
     residual = subtract_parent(residual, x, eqs, vars)
     
@@ -457,7 +462,7 @@ function compute_residual(c, x::SVector{N,T}, vars, others, ind::Int64, ipartial
 
     # # evaluates the self-components of the residual
     eq       = eqs[1]
-    residual = evaluate_state_function(eq, args_all)
+    residual = evaluate_state_function(eq, args_all, others)
     residual = add_children(residual, x, eq)
     residual = subtract_parent(residual, x, eq, vars)
     
