@@ -17,8 +17,12 @@ end
     return (; zip(k, vals)...)
 end
 
-# dummy NamedTuple allocators
+# Define history kwargs variables (which we can define as tuples )
+history_kwargs(a::AbstractElasticity)   = (:τ0,)
+history_kwargs(a::AbstractViscosity)    = (:d,)
+history_kwargs(a::AbstractPlasticity)   = ()
 
+# dummy NamedTuple allocators
 @inline residual_kwargs(::Type{T}, ::Function)                                       where T = (; tmp = zero(T))
 @inline residual_kwargs(::Type{T}, ::typeof(compute_strain_rate))                    where T = (; ε = zero(T),)
 @inline residual_kwargs(::Type{T}, ::typeof(compute_volumetric_strain_rate))         where T = (; θ = zero(T))
