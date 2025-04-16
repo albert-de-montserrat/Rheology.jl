@@ -347,24 +347,16 @@ function extract_local_kwargs(others::NamedTuple, keys_hist::NTuple{M,Symbol}, n
     return NamedTuple{keys(others)}(vals_new)
 end
 
-@generated function extract_local_kwargs(keys_args::NTuple{N,Symbol}, vals_args::NTuple{N,Union{_T, Tuple}}, keys_hist::NTuple{M,Symbol}, n::Int) where {N,M,_T}
+@generated function extract_local_kwargs(keys_args::NTuple{N,Symbol}, vals_args::NTuple{N,Union{Float64, Tuple}}, keys_hist::NTuple{M,Symbol}, n::Int64) where {N,M}
     quote 
-        Base.@ntuple $N i -> begin
-            @inline
-            name = keys_args[i]
-            if isa(vals_args[i], Tuple) 
-                if name in keys_hist
-                    val = vals_args[i][n]
-                else
-                    val = vals_args[i][1]
-                end
-            else
-                val = vals_args[i]
-            end
-            val
-        end
+        @inline
+        Base.@ntuple $N i -> @inbounds _extract_local_kwargs(vals_args[i], keys_args[i], keys_hist, n)
     end
 end
+
+Base.@propagate_inbounds @inline _extract_local_kwargs(vals_args::Tuple, name, keys_hist, n) = ismember(name, keys_hist) ? vals_args[n] : vals_args[1]
+
+@inline _extract_local_kwargs(vals_args, ::Any, ::Any, ::Any) = vals_args
 
 @inline function evaluate_state_function(eq::CompositeEquation, args, others) 
     (; fn, rheology, el_number) = eq
