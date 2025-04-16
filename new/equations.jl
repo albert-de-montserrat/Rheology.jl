@@ -204,99 +204,33 @@ end
 
 @inline global_el_numbering(::Tuple{}, ::Base.RefValue) = ()
 
+@inline global_eltype_numbering(c::AbstractCompositeModel) = global_eltype_numbering(c, Ref(0), Ref(0), Ref(0))
 
-# Numbers the type of the elements
-# function global_eltype_numbering(c::NTuple{N, AbstractCompositeModel}, n_vi=0, n_el=0, n_pl=0) where N 
-#     # This allocates
-#     Nel = ();
-#     for i=1:N
-#         loc_num,n_vi, n_el, n_pl = global_eltype_numbering(c[i], n_vi, n_el, n_pl)
-#         Nel = (Nel..., loc_num)
-#     end
-
-#    return Nel, n_vi, n_el, n_pl
-# end
-
-# function global_eltype_numbering(c::NTuple{N, AbstractRheology}, n_vi=0, n_el=0, n_pl=0) where N
-#     Nel = ()
-    
-#     for i=1:N
-#         if isa(c[i], AbstractViscosity)
-#             n_vi += 1
-#             Nel = (Nel..., n_vi)
-#         elseif isa(c[i], AbstractElasticity)
-#             n_el += 1
-#             Nel = (Nel..., n_el)
-#         elseif isa(c[i], AbstractPlasticity)
-#             n_pl += 1
-#             Nel = (Nel..., n_pl)
-#         else
-#             error("Rheology not defined")
-#         end
-#     end
-#     return Nel, n_vi, n_el, n_pl
-# end
-
-# function global_eltype_numbering(c::AbstractCompositeModel,n_vi=0, n_el=0, n_pl=0)   
-#     num_leafs, n_vi, n_el, n_pl    = global_eltype_numbering(c.leafs,n_vi, n_el, n_pl)
-#     if !isempty(c.branches)
-
-#         num_branches, n_vi, n_el, n_pl = global_eltype_numbering(c.branches, n_vi, n_el, n_pl)
-#     else
-#         num_branches = ()
-#     end
-#     Nel = (num_leafs, num_branches)
-#     return Nel, n_vi, n_el, n_pl
-# end
-# global_eltype_numbering(::Tuple{},n_vi=0, n_el=0, n_pl=0) = ()
-
-# function global_eltype_numbering(c::AbstractCompositeModel) 
-#     Nel, n_vi, n_el, n_pl = global_eltype_numbering(c, 0, 0, 0)
-#     return Nel
-# end
-
-@inline update_local_counter!(local_counter::Base.RefValue, counter::Base.RefValue, ::T, ::Type{T})        where {T <: AbstractRheology} = local_counter[] = counter[]
-@inline update_local_counter!(::Base.RefValue, ::Base.RefValue, ::T1, ::Type{T2}) where {T1 <: AbstractRheology, T2 <: AbstractRheology} = ()
-
-@inline function global_eltype_numbering(c::AbstractCompositeModel) |
-    n_vi = global_eltype_numbering(c, AbstractViscosity,  Ref(0), Ref(0)) |> flatten
-    n_el = global_eltype_numbering(c, AbstractElasticity, Ref(0), Ref(0)) #|> superflatten
-    n_pl = global_eltype_numbering(c, AbstractPlasticity, Ref(0), Ref(0)) #|> superflatten
-    
-    return n_vi, n_el, n_pl
+@inline function global_eltype_numbering(c::AbstractCompositeModel, counter_v::Base.RefValue,counter_el::Base.RefValue,counter_pl::Base.RefValue)
+    n1 = global_eltype_numbering(c.leafs, counter_v, counter_el, counter_pl)
+    n2 = global_eltype_numbering(c.branches, counter_v, counter_el, counter_pl)
+    return (n1, n2...)
 end
 
-@inline function global_eltype_numbering(c::AbstractCompositeModel, local_counter, counter::Base.RefValue)
-    n1 = global_eltype_numbering(c.leafs, type, local_counter, counter) #|> superflatten |> tuple
-    n2 = global_eltype_numbering(c.branches, type, local_counter, counter) 
-    return (n1..., n2)
-end
-
-@inline function global_eltype_numbering(c::AbstractCompositeModel, type, local_counter, counter::Base.RefValue)
-    n1 = global_eltype_numbering(c.leafs, type, local_counter, counter) |> superflatten |> superflatten |> tuple
-    n2 = global_eltype_numbering(c.branches, type, local_counter, counter)
-    return (n1..., n2)
-end
-
-@generated function global_eltype_numbering(c::NTuple{N, AbstractCompositeModel}, type, local_counter, counter::Base.RefValue) where N
+@generated function global_eltype_numbering(c::NTuple{N, AbstractRheology}, counter_v::Base.RefValue, counter_el::Base.RefValue, counter_pl::Base.RefValue) where N
     quote
         @inline
-        Base.@ntuple $N i -> global_eltype_numbering(c[i], type, local_counter, counter)
+        Base.@ntuple $N i -> global_eltype_numbering(c[i], counter_v, counter_el, counter_pl)
     end
 end
 
-@generated function global_eltype_numbering(c::NTuple{N, AbstractRheology}, type, local_counter, counter::Base.RefValue) where N
+@generated function global_eltype_numbering(c::NTuple{N, AbstractCompositeModel}, counter_v::Base.RefValue, counter_el::Base.RefValue, counter_pl::Base.RefValue) where N
     quote
         @inline
-        Base.@ntuple $N i -> begin
-            counter[] += 1
-            update_local_counter!(local_counter, counter, c[i], type)
-        end
+        Base.@ntuple $N i -> global_eltype_numbering(c[i], counter_v, counter_el, counter_pl)
     end
 end
 
-@inline global_eltype_numbering(::Tuple{}, ::Any, ::Base.RefValue, ::Base.RefValue) = ()
+@inline global_eltype_numbering(::Tuple{}, ::Base.RefValue, ::Base.RefValue, ::Base.RefValue) = ()
 
+global_eltype_numbering(c::AbstractViscosity,  counter_v::Base.RefValue, counter_el::Base.RefValue, counter_pl::Base.RefValue) = counter_v[] += 1
+global_eltype_numbering(c::AbstractElasticity, counter_v::Base.RefValue, counter_el::Base.RefValue, counter_pl::Base.RefValue) = counter_el[] += 1
+global_eltype_numbering(c::AbstractPlasticity, counter_v::Base.RefValue, counter_el::Base.RefValue, counter_pl::Base.RefValue) = counter_pl[] += 1
 
 #get_local_functions(c::NTuple{N, AbstractCompositeModel}) where N = ntuple(i -> get_own_functions(c[i]), Val(N))
 function get_local_functions(c::SeriesModel)
