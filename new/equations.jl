@@ -259,7 +259,7 @@ end
 @inline update_local_counter!(::Base.RefValue, ::Base.RefValue, ::T1, ::Type{T2}) where {T1 <: AbstractRheology, T2 <: AbstractRheology} = ()
 
 @inline function global_eltype_numbering(c::AbstractCompositeModel) |
-    n_vi = global_eltype_numbering(c, AbstractViscosity,  Ref(0), Ref(0)) #|> superflatten
+    n_vi = global_eltype_numbering(c, AbstractViscosity,  Ref(0), Ref(0)) |> flatten
     n_el = global_eltype_numbering(c, AbstractElasticity, Ref(0), Ref(0)) #|> superflatten
     n_pl = global_eltype_numbering(c, AbstractPlasticity, Ref(0), Ref(0)) #|> superflatten
     
@@ -273,7 +273,7 @@ end
 end
 
 @inline function global_eltype_numbering(c::AbstractCompositeModel, type, local_counter, counter::Base.RefValue)
-    n1 = global_eltype_numbering(c.leafs, type, local_counter, counter) # |> superflatten |> tuple
+    n1 = global_eltype_numbering(c.leafs, type, local_counter, counter) |> superflatten |> superflatten |> tuple
     n2 = global_eltype_numbering(c.branches, type, local_counter, counter)
     return (n1..., n2)
 end
@@ -398,6 +398,31 @@ end
             merge(NamedTuple{name}(x[i]), others)
         end
     end
+end
+
+# returns the others args for every local element
+function extract_local_others(eq::CompositeEquation, others::NamedTuple)
+    local_others = ()
+    keys_others  = keys(others)
+    vals_others  = values(others)
+    el_number    = eq.el_number
+    for (N,el) = enumerate(eq.rheology)
+        hist_kwargs     = history_kwargs(el)
+        modify_kwargs   = intersect(keys(others), hist_kwargs)
+        local_vals      = ( )
+        for (i,k) in enumerate(keys_others)
+            val = vals_others[i]
+            if isa(val, Tuple) 
+                if k in modify_kwargs
+                    val = val[el_number[N]]
+                end
+            end
+            local_vals = (local_vals...,  val)
+        end
+        local_others = (local_others..., NamedTuple{keys_others}(local_vals))
+    end
+
+    return local_others
 end
 
 @inline function evaluate_state_function(eq::CompositeEquation, args) 
