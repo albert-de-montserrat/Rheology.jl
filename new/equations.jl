@@ -358,6 +358,8 @@ Base.@propagate_inbounds @inline _extract_local_kwargs(vals_args::Tuple, name, k
 
 @inline _extract_local_kwargs(vals_args, ::Any, ::Any, ::Any) = vals_args
 
+@inline ismember(name::Symbol, keys_hist::NTuple{N,Symbol}) where N = name in keys_hist
+
 @inline function evaluate_state_function(eq::CompositeEquation, args, others)
     (; fn, rheology, el_number) = eq
     return evaluate_state_function(fn, rheology, args, others, el_number)
