@@ -334,29 +334,36 @@ end
     end
 end
 
-# returns the others args for every local element
-function extract_local_others(eq::CompositeEquation, others::NamedTuple)
-    local_others = ()
-    keys_others  = keys(others)
-    vals_others  = values(others)
-    el_number    = eq.el_number
-    for (N,el) = enumerate(eq.rheology)
-        hist_kwargs     = history_kwargs(el)
-        modify_kwargs   = intersect(keys(others), hist_kwargs)
-        local_vals      = ( )
-        for (i,k) in enumerate(keys_others)
-            val = vals_others[i]
-            if isa(val, Tuple) 
-                if k in modify_kwargs
-                    val = val[el_number[N]]
-                end
-            end
-            local_vals = (local_vals...,  val)
-        end
-        local_others = (local_others..., NamedTuple{keys_others}(local_vals))
-    end
+# extracts local kwargs when the args is a tuple, and it is listed 
+# julia> others      = (; dt = 1e10, τ0 = (1.1, 3.0), d = (4, 2))
+# julia> extract_local_kwargs(others, (:τ0,), 2)
+# (dt = 1.0e10, τ0 = 3.0, d = 4)
+# julia> extract_local_kwargs(others, (:d,), 2)
+# (dt = 1.0e10, τ0 = 1.1, d = 2)
+# julia> extract_local_kwargs(others, (:τ0,:d), 2)
+# (dt = 1.0e10, τ0 = 3.0, d = 2)
+function extract_local_kwargs(others::NamedTuple, keys_hist::NTuple{M,Symbol}, n::Int64) where {M}
+    vals_new = extract_local_kwargs(keys(others), values(others), keys_hist, n)
+    return NamedTuple{keys(others)}(vals_new)
+end
 
-    return local_others
+@generated function extract_local_kwargs(keys_args::NTuple{N,Symbol}, vals_args::NTuple{N,Union{_T, Tuple}}, keys_hist::NTuple{M,Symbol}, n::Int) where {N,M,_T}
+    quote 
+        Base.@ntuple $N i -> begin
+            @inline
+            name = keys_args[i]
+            if isa(vals_args[i], Tuple) 
+                if name in keys_hist
+                    val = vals_args[i][n]
+                else
+                    val = vals_args[i][1]
+                end
+            else
+                val = vals_args[i]
+            end
+            val
+        end
+    end
 end
 
 @inline function evaluate_state_function(eq::CompositeEquation, args) 
