@@ -250,6 +250,11 @@ end
 # end
 # global_eltype_numbering(::Tuple{},n_vi=0, n_el=0, n_pl=0) = ()
 
+# function global_eltype_numbering(c::AbstractCompositeModel) 
+#     Nel, n_vi, n_el, n_pl = global_eltype_numbering(c, 0, 0, 0)
+#     return Nel
+# end
+
 @inline update_local_counter!(local_counter::Base.RefValue, counter::Base.RefValue, ::T, ::Type{T})        where {T <: AbstractRheology} = local_counter[] = counter[]
 @inline update_local_counter!(::Base.RefValue, ::Base.RefValue, ::T1, ::Type{T2}) where {T1 <: AbstractRheology, T2 <: AbstractRheology} = ()
 
@@ -263,15 +268,15 @@ end
 
 @inline function global_eltype_numbering(c::AbstractCompositeModel, local_counter, counter::Base.RefValue)
     type = AbstractViscosity
-    n1 = global_eltype_numbering(c.leafs, type, local_counter, counter)
-    n2 = global_eltype_numbering(c.branches, type, local_counter, counter)
-    return n1, n2
+    n1 = global_eltype_numbering(c.leafs, type, local_counter, counter) |> superflatten |> tuple
+    n2 = global_eltype_numbering(c.branches, type, local_counter, counter) 
+    return (n1..., n2)
 end
 
 @inline function global_eltype_numbering(c::AbstractCompositeModel, type, local_counter, counter::Base.RefValue)
-    n1 = global_eltype_numbering(c.leafs, type, local_counter, counter)
+    n1 = global_eltype_numbering(c.leafs, type, local_counter, counter) |> superflatten |> tuple
     n2 = global_eltype_numbering(c.branches, type, local_counter, counter)
-    return n1, n2
+    return (n1..., n2)
 end
 
 @generated function global_eltype_numbering(c::NTuple{N, AbstractCompositeModel}, type, local_counter, counter::Base.RefValue) where N
@@ -293,10 +298,6 @@ end
 
 @inline global_eltype_numbering(::Tuple{}, ::Any, ::Base.RefValue, ::Base.RefValue) = ()
 
-function global_eltype_numbering(c::AbstractCompositeModel) 
-    Nel, n_vi, n_el, n_pl = global_eltype_numbering(c, 0, 0, 0)
-    return Nel
-end
 
 #get_local_functions(c::NTuple{N, AbstractCompositeModel}) where N = ntuple(i -> get_own_functions(c[i]), Val(N))
 function get_local_functions(c::SeriesModel)
