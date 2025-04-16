@@ -267,13 +267,13 @@ end
 end
 
 @inline function global_eltype_numbering(c::AbstractCompositeModel, local_counter, counter::Base.RefValue)
-    n1 = global_eltype_numbering(c.leafs, type, local_counter, counter) |> superflatten |> tuple
+    n1 = global_eltype_numbering(c.leafs, type, local_counter, counter) #|> superflatten |> tuple
     n2 = global_eltype_numbering(c.branches, type, local_counter, counter) 
     return (n1..., n2)
 end
 
 @inline function global_eltype_numbering(c::AbstractCompositeModel, type, local_counter, counter::Base.RefValue)
-    n1 = global_eltype_numbering(c.leafs, type, local_counter, counter) |> superflatten |> tuple
+    n1 = global_eltype_numbering(c.leafs, type, local_counter, counter) # |> superflatten |> tuple
     n2 = global_eltype_numbering(c.branches, type, local_counter, counter)
     return (n1..., n2)
 end
