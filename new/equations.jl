@@ -149,36 +149,60 @@ end
 get_own_functions(::Tuple{}) = (), ()
 # get_own_functions(::Tuple{}) = compute_strain_rate, ()
 
-# Number the rheological elements sequantially
-function global_el_numbering(c::NTuple{N, AbstractCompositeModel}, v=0) where N 
-    # This allocates
-    n = ();
-    for i=1:N
-        nmax = maximum(superflatten(n), init=v)
-        loc_num = global_el_numbering(c[i], nmax)
-        n = (n..., loc_num)
-    end
+# # Number the rheological elements sequantially
+# function global_el_numbering(c::NTuple{N, AbstractCompositeModel}, v=0) where N 
+#     # This allocates
+#     n = ();
+#     for i=1:N
+#         nmax = maximum(superflatten(n), init=v)
+#         loc_num = global_el_numbering(c[i], nmax)
+#         n = (n..., loc_num)
+#     end
 
-   return n
+#    return n
+# end
+
+# @generated function global_el_numbering(c::NTuple{N, AbstractRheology}, v=0) where N
+#     #N = ntuple(i -> i + v, Val(N))
+#     quote
+#         Base.@ntuple $N i-> begin
+#             @inline
+#                 i + v
+#         end
+#     end
+# end
+
+
+# function global_el_numbering(c::AbstractCompositeModel,v=0)   
+#     num_leafs    = global_el_numbering(c.leafs,v)
+#     num_branches = global_el_numbering(c.branches,maximum(num_leafs, init=v))
+#     return num_leafs, num_branches
+# end
+# global_el_numbering(::Tuple{},v=0) = ()
+
+@inline global_el_numbering(c::AbstractCompositeModel) = global_el_numbering(c, Ref(0))
+
+@inline function global_el_numbering(c::AbstractCompositeModel, counter::Base.RefValue)
+    n1 = global_el_numbering(c.leafs, counter)
+    n2 = global_el_numbering(c.branches, counter)
+    return (n1, n2...)
 end
 
-@generated function global_el_numbering(c::NTuple{N, AbstractRheology}, v=0) where N
-    #N = ntuple(i -> i + v, Val(N))
+@generated function global_el_numbering(::NTuple{N, AbstractRheology}, counter::Base.RefValue) where N
     quote
-        Base.@ntuple $N i-> begin
-            @inline
-                i + v
-        end
+        @inline
+        Base.@ntuple $N i -> counter[] += 1
     end
 end
 
-
-function global_el_numbering(c::AbstractCompositeModel,v=0)   
-    num_leafs    = global_el_numbering(c.leafs,v)
-    num_branches = global_el_numbering(c.branches,maximum(num_leafs, init=v))
-    return num_leafs, num_branches
+@generated function global_el_numbering(c::NTuple{N, AbstractCompositeModel}, counter::Base.RefValue) where N
+    quote
+        @inline
+        Base.@ntuple $N i -> global_el_numbering(c[i], counter)
+    end
 end
-global_el_numbering(::Tuple{},v=0) = ()
+
+@inline global_el_numbering(::Tuple{}, ::Base.RefValue) = ()
 
 
 # Numbers the type of the elements
