@@ -185,7 +185,7 @@ get_own_functions(::Tuple{}) = (), ()
 @inline function global_el_numbering(c::AbstractCompositeModel, counter::Base.RefValue)
     n1 = global_el_numbering(c.leafs, counter)
     n2 = global_el_numbering(c.branches, counter)
-    return (n1, n2...)
+    return (n1, n2)
 end
 
 @generated function global_el_numbering(::NTuple{N, AbstractRheology}, counter::Base.RefValue) where N
@@ -209,7 +209,7 @@ end
 @inline function global_eltype_numbering(c::AbstractCompositeModel, counter_v::Base.RefValue,counter_el::Base.RefValue,counter_pl::Base.RefValue)
     n1 = global_eltype_numbering(c.leafs, counter_v, counter_el, counter_pl)
     n2 = global_eltype_numbering(c.branches, counter_v, counter_el, counter_pl)
-    return (n1, n2...)
+    return (n1, n2)
 end
 
 @generated function global_eltype_numbering(c::NTuple{N, AbstractRheology}, counter_v::Base.RefValue, counter_el::Base.RefValue, counter_pl::Base.RefValue) where N
