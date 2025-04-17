@@ -423,6 +423,8 @@ c, x, vars, args, others = let
 
     p = ParallelModel(viscous2, elastic)
     c = SeriesModel(viscous1, elastic, p)
+    #c = SeriesModel(elastic, p)
+    
     vars = (; ε = 1.0e-15, θ = 1.0e-20)       # input variables (constant)
     args = (; τ = 1.0e3, P = 1.0e6)         # guess variables (we solve for these, differentiable)
     others = (; dt = 1.0e10, τ0 = (1.0, 2.0))       # other non-differentiable variables needed to evaluate the state functions
@@ -488,6 +490,46 @@ end
 eqs = generate_equations(c)
 
 r = compute_residual(c, x, vars, others)
+xnew = solve(c, x, vars, others)
+
+
+# now update elastic stress
+is_eq_elastic(::AbstractElasticity) = true
+is_eq_elastic(::T) where T = false
+
+
+function compute_stress_elastic(eqs, xnew, others)
+
+    # need a way top determine the amount of elastic elements in a non-allocating way,
+    # perhaps using the type of the CompositeEquation?
+    τ_elastic = zeros(2)
+
+    args_all = generate_args_template(eqs, xnew, others)
+    for (i_eq, eq) in enumerate(eqs)
+        args = args_all[i_eq]
+        for (i_rheo,r) in enumerate(eq.rheology)
+            if is_eq_elastic(r) 
+                number = eq.el_number[i_rheo]
+                if eq.fn == compute_strain_rate
+                    # stress is a primary variable already
+                    τ   = xnew[eq.self]
+                    τ_elastic[number] = τ
+                elseif eq.fn == compute_stress
+                    #   compute elastic stress from local strain rate (if we have a plastic )
+                    keys_hist       = history_kwargs(r)
+                    args_local      = extract_local_kwargs(others, keys_hist, number)
+                    args_combined   = merge(args, args_local)
+
+                    τ   = compute_stress(r, args_combined)
+                    τ_elastic[number] = τ
+                end
+            end
+        end
+    end
+
+    return τ_elastic
+end
+
 
 
 #J  = ForwardDiff.jacobian(y -> compute_residual(c, y, vars, others), x)
