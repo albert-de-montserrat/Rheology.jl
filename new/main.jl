@@ -497,14 +497,15 @@ xnew = solve(c, x, vars, others)
 is_eq_elastic(::AbstractElasticity) = true
 is_eq_elastic(::T) where T = false
 
+τ_elastic = zeros(2)
 
-function compute_stress_elastic(eqs, xnew, others)
+function compute_stress_elastic0(eqs, xnew, others)
 
     # need a way top determine the amount of elastic elements in a non-allocating way,
     # perhaps using the type of the CompositeEquation?
-    τ_elastic = zeros(2)
 
     args_all = generate_args_template(eqs, xnew, others)
+    
     for (i_eq, eq) in enumerate(eqs)
         args = args_all[i_eq]
         for (i_rheo,r) in enumerate(eq.rheology)
@@ -529,7 +530,55 @@ function compute_stress_elastic(eqs, xnew, others)
 
     return τ_elastic
 end
+compute_stress_elastic0(eqs, xnew, others)
 
+### NEW compute_stress_elastic
 
+@generated function compute_stress_elastic(eqs::NTuple{N, CompositeEquation}, xnew, others) where N
+    quote
+        @inline
+        args_all = generate_args_template(eqs, xnew, others)
+        τ_elastic = Base.@ntuple $N i_eq -> begin
+            args = args_all[i_eq]
+            eq   = eqs[i_eq]
+            (; self, rheology, fn, el_number) = eq
+            
+            @inline _compute_stress_elastic1(rheology, self, fn, el_number, xnew, others, args)
+        end |> superflatten 
+        return SVector(superflatten(τ_elastic))
+    end
+end
 
-#J  = ForwardDiff.jacobian(y -> compute_residual(c, y, vars, others), x)
+@generated function _compute_stress_elastic1(rheology::NTuple{N, Any}, self, fn::F, el_number, xnew, others, args) where {N,F}
+    quote
+        @inline
+        Base.@ntuple $N i_rheo -> begin
+            r      = rheology[i_rheo]
+            number = el_number[i_rheo]
+            _compute_stress_elastic2(r, self, fn, number, xnew, others, args)
+        end |> superflatten
+    end
+end
+
+@inline _compute_stress_elastic2(::T, ::Vararg{Any, N}) where {T,N} = ()
+
+function _compute_stress_elastic2(r::AbstractElasticity, self, fn::F, number, xnew, others, args) where F
+  
+    @inline f(::F, ::Vararg{Any, N}) where {F, N} = () 
+    @inline f(::typeof(compute_strain_rate), r, others, args, number, self, xnew) = xnew[self]
+
+    @inline function f(::typeof(compute_stress), r, others, args, number, self, xnew)
+        # compute elastic stress from local strain rate (if we have a plastic )
+        keys_hist         = history_kwargs(r)
+        args_local        = extract_local_kwargs(others, keys_hist, number)
+        args_combined     = merge(args, args_local)
+        compute_stress(r, args_combined)
+    end
+
+    f(fn, r, others, args, number, self, xnew)
+end
+
+@b compute_stress_elastic($(eqs, xnew, others)...)
+
+v = compute_stress_elastic(eqs, xnew, others)
+
