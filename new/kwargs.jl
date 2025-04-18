@@ -18,7 +18,7 @@ end
 end
 
 # Define history kwargs variables (which we can define as tuples )
-history_kwargs(a::AbstractElasticity) = (:τ0,)
+history_kwargs(a::AbstractElasticity) = (:τ0,:P0)
 history_kwargs(a::AbstractViscosity) = (:d,)
 history_kwargs(a::AbstractPlasticity) = ()
 

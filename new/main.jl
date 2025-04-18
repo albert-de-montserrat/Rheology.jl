@@ -10,6 +10,7 @@ include("kwargs.jl")
 include("recursion.jl")
 include("equations.jl")
 include("others.jl")
+include("post_calculations.jl")
 include("../src/print_rheology.jl")
 
 function bt_line_search(Δx, J, x, r, composite, vars, others; α = 1.0, ρ = 0.5, c = 1.0e-4, α_min = 1.0e-8)
@@ -58,7 +59,9 @@ viscous2 = LinearViscosity(1.0e20)
 viscousbulk = BulkViscosity(1.0e18)
 powerlaw = PowerLawViscosity(5.0e19, 3)
 drucker = DruckerPrager(1.0e6, 10.0, 0.0)
-elastic = Elasticity(1.0e10, 1.0e12)
+elastic  = Elasticity(1.0e10, 1.0e12)
+elastic1 = Elasticity(1.0e11, 1.0e13)
+
 elasticbulk = BulkElasticity(1.0e10)
 elasticinc = IncompressibleElasticity(1.0e10)
 
@@ -422,17 +425,18 @@ c, x, vars, args, others = let
     #                   elastic --- viscous
 
     p = ParallelModel(viscous2, elastic)
-    c = SeriesModel(viscous1, elastic, p)
-    #c = SeriesModel(elastic, p)
+    #c = SeriesModel(viscous1, elastic1, p)
+    c = SeriesModel(elastic, p)
     
-    vars = (; ε = 1.0e-15, θ = 1.0e-20)       # input variables (constant)
-    args = (; τ = 1.0e3, P = 1.0e6)         # guess variables (we solve for these, differentiable)
-    others = (; dt = 1.0e10, τ0 = (1.0, 2.0))       # other non-differentiable variables needed to evaluate the state functions
+    vars = (; ε = 1.0e-15, θ = 1.0e-20)         # input variables (constant)
+    args = (; τ = 1.0e3, P = 1.0e6)             # guess variables (we solve for these, differentiable)
+    others = (; dt = 1.0e10, τ0 = (1.0, 2.0), P0=(0.0, 0.1))       # other non-differentiable variables needed to evaluate the state functions
 
     x = SA[
-        values(args)..., # global guess(es), solving for these
-        1 .* values(vars)[1]..., # local  guess(es)
-        1 .* values(args)[1]..., # local  guess(es)
+        values(args)[1], # global guess(es), solving for these
+        values(vars)[1], # global guess(es), solving for these
+        values(args)[2], # global guess(es), solving for these
+        values(vars)[2], # global guess(es), solving for these
     ]
 
     c, x, vars, args, others
@@ -492,93 +496,6 @@ eqs = generate_equations(c)
 r = compute_residual(c, x, vars, others)
 xnew = solve(c, x, vars, others)
 
-
-# now update elastic stress
-is_eq_elastic(::AbstractElasticity) = true
-is_eq_elastic(::T) where T = false
-
-τ_elastic = zeros(2)
-
-function compute_stress_elastic0(eqs, xnew, others)
-
-    # need a way top determine the amount of elastic elements in a non-allocating way,
-    # perhaps using the type of the CompositeEquation?
-
-    args_all = generate_args_template(eqs, xnew, others)
-    
-    for (i_eq, eq) in enumerate(eqs)
-        args = args_all[i_eq]
-        for (i_rheo,r) in enumerate(eq.rheology)
-            if is_eq_elastic(r) 
-                number = eq.el_number[i_rheo]
-                if eq.fn == compute_strain_rate
-                    # stress is a primary variable already
-                    τ   = xnew[eq.self]
-                    τ_elastic[number] = τ
-                elseif eq.fn == compute_stress
-                    #   compute elastic stress from local strain rate (if we have a plastic )
-                    keys_hist       = history_kwargs(r)
-                    args_local      = extract_local_kwargs(others, keys_hist, number)
-                    args_combined   = merge(args, args_local)
-
-                    τ   = compute_stress(r, args_combined)
-                    τ_elastic[number] = τ
-                end
-            end
-        end
-    end
-
-    return τ_elastic
-end
-compute_stress_elastic0(eqs, xnew, others)
-
-### NEW compute_stress_elastic
-
-@generated function compute_stress_elastic(eqs::NTuple{N, CompositeEquation}, xnew, others) where N
-    quote
-        @inline
-        args_all = generate_args_template(eqs, xnew, others)
-        τ_elastic = Base.@ntuple $N i_eq -> begin
-            args = args_all[i_eq]
-            eq   = eqs[i_eq]
-            (; self, rheology, fn, el_number) = eq
-            
-            @inline _compute_stress_elastic1(rheology, self, fn, el_number, xnew, others, args)
-        end |> superflatten 
-        return SVector(superflatten(τ_elastic))
-    end
-end
-
-@generated function _compute_stress_elastic1(rheology::NTuple{N, Any}, self, fn::F, el_number, xnew, others, args) where {N,F}
-    quote
-        @inline
-        Base.@ntuple $N i_rheo -> begin
-            r      = rheology[i_rheo]
-            number = el_number[i_rheo]
-            _compute_stress_elastic2(r, self, fn, number, xnew, others, args)
-        end |> superflatten
-    end
-end
-
-@inline _compute_stress_elastic2(::T, ::Vararg{Any, N}) where {T,N} = ()
-
-function _compute_stress_elastic2(r::AbstractElasticity, self, fn::F, number, xnew, others, args) where F
-  
-    @inline f(::F, ::Vararg{Any, N}) where {F, N} = () 
-    @inline f(::typeof(compute_strain_rate), r, others, args, number, self, xnew) = xnew[self]
-
-    @inline function f(::typeof(compute_stress), r, others, args, number, self, xnew)
-        # compute elastic stress from local strain rate (if we have a plastic )
-        keys_hist         = history_kwargs(r)
-        args_local        = extract_local_kwargs(others, keys_hist, number)
-        args_combined     = merge(args, args_local)
-        compute_stress(r, args_combined)
-    end
-
-    f(fn, r, others, args, number, self, xnew)
-end
-
-@b compute_stress_elastic($(eqs, xnew, others)...)
-
-v = compute_stress_elastic(eqs, xnew, others)
-
+# Extract elastic stresses/pressure from solutio vector
+τ_elastic = compute_stress_elastic(c, xnew, others)
+P_elastic = compute_pressure_elastic(c, xnew, others)
