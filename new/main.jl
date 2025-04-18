@@ -11,6 +11,7 @@ include("recursion.jl")
 include("equations.jl")
 include("others.jl")
 include("post_calculations.jl")
+include("initial_guess.jl")
 include("../src/print_rheology.jl")
 
 function bt_line_search(Δx, J, x, r, composite, vars, others; α = 1.0, ρ = 0.5, c = 1.0e-4, α_min = 1.0e-8)
@@ -209,10 +210,12 @@ c, x, vars, args, others = let
     args = (; τ = 1.0e2) # guess variables (we solve for these, differentiable)
     others = (;)       # other non-differentiable variables needed to evaluate the state functions
 
-    x = SA[
-        values(vars)..., # local  guess(es)
-        values(args)..., # global guess(es), solving for these
-    ]
+    #x = SA[
+    #    values(vars)..., # local  guess(es)
+    #    values(args)..., # global guess(es), solving for these
+    #]
+    
+    x = initial_guess_x(c, vars, args, others)
 
     c, x, vars, args, others
 end
@@ -231,12 +234,13 @@ c, x, vars, args, others = let
     args = (; τ = 1.0e2) # guess variables (we solve for these, differentiable)
     others = (;)       # other non-differentiable variables needed to evaluate the state functions
 
-    x = SA[
-        values(args)..., # global guess(es), solving for these
-        values(vars)..., # local  guess(es)
-        values(args)..., # local  guess(es)
-        values(vars)..., # local  guess(es)
-    ]
+    x = initial_guess_x(c, vars, args, others)
+    #x = SA[
+    #    values(args)..., # global guess(es), solving for these
+    #    values(vars)..., # local  guess(es)
+    #    values(args)..., # local  guess(es)
+    #    values(vars)..., # local  guess(es)
+    #]
 
     c, x, vars, args, others
 end
@@ -291,12 +295,14 @@ c, x, vars, args, others = let
     args   = (; τ = 2e9)   # guess variables (we solve for these, differentiable)
     others = (; dt = 1e10) # other non-differentiable variables needed to evaluate the state functions
 
-    x = SA[
-        values(args)..., # global guess(es), solving for these
-        0 .* values(vars)..., # local  guess(es)
-        0 .* values(vars)..., # local  guess(es)
-        0 .* values(args)..., # local  guess(es)
-    ]
+    #x = SA[
+    #    values(args)..., # global guess(es), solving for these
+    #    0 .* values(vars)..., # local  guess(es)
+    #    0 .* values(vars)..., # local  guess(es)
+    #    0 .* values(args)..., # local  guess(es)
+    #]
+    x = initial_guess_x(c, vars, args, others)
+
 
     c, x, vars, args, others
 end
@@ -409,9 +415,11 @@ c, x, vars, args, others = let
     args   = (; τ = 1e3,   P = 1e6)         # guess variables (we solve for these, differentiable)
     others = (; dt = 1e10)                  # other non-differentiable variables needed to evaluate the state functions
 
-    x = SA[
-        values(args)..., # global guess(es), solving for these
-    ]
+    x = initial_guess_x(c, others, args, vars)
+    #x = SA[
+    #    values(args)..., # global guess(es), solving for these
+    #]
+    x = init
 
     c, x, vars, args, others
 end
@@ -425,8 +433,8 @@ c, x, vars, args, others = let
     #                   elastic --- viscous
 
     p = ParallelModel(viscous2, elastic)
-    #c = SeriesModel(viscous1, elastic1, p)
-    c = SeriesModel(elastic, p)
+    c = SeriesModel(viscous1, elastic1, p)
+    #c = SeriesModel(elastic, p)
     
     vars = (; ε = 1.0e-15, θ = 1.0e-20)         # input variables (constant)
     args = (; τ = 1.0e3, P = 1.0e6)             # guess variables (we solve for these, differentiable)
@@ -491,11 +499,80 @@ end
 
 
 #main(c, x, vars, args, others)
-eqs = generate_equations(c)
+#eqs = generate_equations(c)
 
-r = compute_residual(c, x, vars, others)
-xnew = solve(c, x, vars, others)
+x0   = initial_guess_x(c, vars, args, others)
+r    = compute_residual(c, x, vars, others)
+xnew = solve(c, x0, vars, others)
+
 
 # Extract elastic stresses/pressure from solutio vector
-τ_elastic = compute_stress_elastic(c, xnew, others)
-P_elastic = compute_pressure_elastic(c, xnew, others)
+#τ_elastic = compute_stress_elastic(c, xnew, others)
+#P_elastic = compute_pressure_elastic(c, xnew, others)
+
+
+
+
+
+
+
+
+# Initial guess for τ
+#=
+N=length(eqs)
+x0 = zeros(N)
+args_all = generate_args_template(eqs,  SVector{N}(x0), others)
+
+eq = eqs[1]
+
+val = 0.0
+for i = 1: length(eq.rheology)
+    keys_hist     = history_kwargs(eq.rheology[i])
+    args_local    = extract_local_kwargs(others, keys_hist, eq.el_number[i])
+    args_combined = merge(args, args_local, vars)
+    fn_c = counterpart(eq.fn)
+    val_local  = fn_c(eq.rheology[i], args_combined)
+    val += inv(τ)
+    #val += val_local
+end
+x0[1]= inv(τ_inv)
+=#
+
+#=
+function estimate_initial_value(eq, others, args, vars)
+
+    if eq.fn == compute_stress || eq.fn == compute_stress_elastic
+        harmonic = true
+    else
+        harmonic = false
+    end
+
+    val = 0.0
+    if  eq.fn == compute_stress || eq.fn == compute_strain_rate ||
+        eq.fn == compute_pressure || eq.fn == compute_volumetric_strain_rate
+
+        for i = 1: length(eq.rheology)
+            keys_hist     = history_kwargs(eq.rheology[i])
+            args_local    = extract_local_kwargs(others, keys_hist, eq.el_number[i])
+            args_combined = merge(args, args_local, vars)
+            fn_c = counterpart(eq.fn)
+            val_local  = fn_c(eq.rheology[i], args_combined)
+            if harmonic
+                val += inv(val_local)
+            else
+                val += val_local
+            end
+        end
+        if harmonic
+            val = inv(val)
+        end
+
+    end
+
+    return val
+end
+=#
+
+
+
+

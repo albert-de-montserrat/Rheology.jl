@@ -21,7 +21,7 @@ Returns stress of the elastic elements
             
             @inline _compute_stress_elastic(rheology, self, fn, el_number, xnew, others, args)
         end |> superflatten 
-        return SVector(superflatten(τ_elastic))
+        return superflatten(τ_elastic)
     end
 end
 compute_stress_elastic(c::AbstractCompositeModel, xnew, others) = compute_stress_elastic(generate_equations(c), xnew, others)
@@ -70,7 +70,7 @@ Returns pressure of the elastic elements
             
             @inline _compute_pressure_elastic(rheology, self, fn, el_number, xnew, others, args)
         end |> superflatten 
-        return SVector(superflatten(τ_elastic))
+        return superflatten(τ_elastic)
     end
 end
 compute_pressure_elastic(c::AbstractCompositeModel, xnew, others) = compute_pressure_elastic(generate_equations(c), xnew, others)
