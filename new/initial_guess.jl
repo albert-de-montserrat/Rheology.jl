@@ -20,6 +20,26 @@ end
     end
 end
 
+"""
+    x_keys = x_keys(c::AbstractCompositeModel)
+Returns the keys of the local solution vector `x` (note that they can be repeated)
+"""
+x_keys(c::AbstractCompositeModel) = x_keys(generate_equations(c))
+
+
+"""
+    x_keys = x_keys(eqs::NTuple{N,CompositeEquation})
+"""
+@generated function x_keys(eqs::NTuple{N,CompositeEquation}) where N
+    quote
+        @inline
+        k = Base.@ntuple $N i -> begin
+            keys(differentiable_kwargs(eqs[i].fn))
+        end
+        superflatten(k)
+    end
+end
+
 estimate_initial_value(eq::CompositeEquation, vars, args, others) = _estimate_initial_value(eq.fn, eq, vars, args, others) 
 @inline _estimate_initial_value(::F, eq, vars, args, others) where {F} = 0
 @inline _estimate_initial_value(::typeof(compute_volumetric_strain_rate), eq, vars, args, others) =  _estimate_initial_value_harm(eq.fn, eq.rheology, eq.el_number, vars, args, others)
