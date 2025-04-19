@@ -12,48 +12,8 @@ include("equations.jl")
 include("others.jl")
 include("post_calculations.jl")
 include("initial_guess.jl")
+include("local_solver.jl")
 include("../src/print_rheology.jl")
-
-function bt_line_search(Δx, J, x, r, composite, vars, others; α = 1.0, ρ = 0.5, c = 1.0e-4, α_min = 1.0e-8)
-
-    perturbed_x = @. x - α * Δx
-    perturbed_r = compute_residual(composite, perturbed_x, vars, others)
-
-    while sqrt(sum(perturbed_r .^ 2)) > sqrt(sum((r + (c * α * (J * Δx))) .^ 2))
-        α *= ρ
-        if α < α_min
-            α = α_min
-            break
-        end
-        perturbed_x = @. x - α * Δx
-        perturbed_r = compute_residual(composite, perturbed_x, vars, others)
-    end
-    return α
-end
-
-function solve(c, x, vars, others)
-    tol = 1.0e-9
-    itermax = 10.0e3
-    it = 0
-    er = Inf
-    # Δx      = similar(x)
-    local α
-    while er > tol
-        it += 1
-        r = compute_residual(c, x, vars, others)
-        J = ForwardDiff.jacobian(y -> compute_residual(c, y, vars, others), x)
-        Δx = J \ r
-        α = bt_line_search(Δx, J, x, r, c, vars, others)
-        x -= α .* Δx
-
-        er = norm(iszero(xᵢ) ? 0.0e0 : Δxᵢ / abs(xᵢ) for (Δxᵢ, xᵢ) in zip(Δx, x)) # norm(r)
-
-        it > itermax && break
-    end
-    println("Iterations: $it, Error: $er, α = $α")
-    return x
-end
-
 
 viscous1 = LinearViscosity(5.0e19)
 viscous2 = LinearViscosity(1.0e20)
@@ -433,48 +393,24 @@ c, x, vars, args, others = let
     #                   elastic --- viscous
 
     p = ParallelModel(viscous2, elastic)
-    c = SeriesModel(viscous1, elastic1, p)
+    viscous3 = LinearViscosity(1.0e21)
+    c = SeriesModel(viscous3, elastic1, p)
+    #c = SeriesModel(viscous3, elastic1)
+
+    #c = p
+   # c = SeriesModel(p);
     #c = SeriesModel(elastic, p)
     
     vars = (; ε = 1.0e-15, θ = 1.0e-20)         # input variables (constant)
     args = (; τ = 1.0e3, P = 1.0e6)             # guess variables (we solve for these, differentiable)
     others = (; dt = 1.0e10, τ0 = (1.0, 2.0), P0=(0.0, 0.1))       # other non-differentiable variables needed to evaluate the state functions
-
-    x = SA[
-        values(args)[1], # global guess(es), solving for these
-        values(vars)[1], # global guess(es), solving for these
-        values(args)[2], # global guess(es), solving for these
-        values(vars)[2], # global guess(es), solving for these
-    ]
+    
+    
+    x   = initial_guess_x(c, vars, args, others)
 
     c, x, vars, args, others
 end
 
-
-function solve(c, x, vars, others)
-    tol = 1.0e-9
-    itermax = 10.0e3
-    it = 0
-    er = Inf
-    # Δx      = similar(x)
-    local α
-    while er > tol
-        it += 1
-        r = compute_residual(c, x, vars, others)
-        J = ForwardDiff.jacobian(y -> compute_residual(c, y, vars, others), x)
-
-        # update Δx
-        Δx = J \ r
-
-        α = bt_line_search(Δx, J, x, r, c, vars, others)
-        x -= α .* Δx
-
-        er = norm(iszero(xᵢ) ? 0.0e0 : Δxᵢ / abs(xᵢ) for (Δxᵢ, xᵢ) in zip(Δx, x)) # norm(r)
-        it > itermax && break
-    end
-    println("Iterations: $it, Error: $er, α = $α")
-    return x
-end
 
 function main(c, x, vars, args, others)
     ε = exp10.(LinRange(log10(1.0e-15), log10(1.0e-8), 50))
@@ -501,78 +437,96 @@ end
 #main(c, x, vars, args, others)
 #eqs = generate_equations(c)
 
-x0   = initial_guess_x(c, vars, args, others)
+#x0   = initial_guess_x(c, vars, args, others)
 r    = compute_residual(c, x, vars, others)
-xnew = solve(c, x0, vars, others)
+#xnew = solve(c, x0, vars, others)
 
+function stress_time( vars, others, x; ntime=200, dt=1e8)
+    # Extract elastic stresses/pressure from solutio vector
+    τ1 = zeros(ntime)
+    τ2 = zeros(ntime)
+    P1 = zeros(ntime)
+    P2 = zeros(ntime)
+    t_v = zeros(ntime)
+    τ_e = (0.0, 0.0)
+    P_e = (0.0, 0.0)
+    t = 0.0
+    for i=2:ntime
+        #global τ_e, P_e, x, vars, others, t
+        others = (; dt = dt, τ0 = τ_e, P0=P_e)       # other non-differentiable variables needed to evaluate the state functions
+        
+        x   = solve(c, x, vars, others, verbose=false)
+        τ_e = compute_stress_elastic(c, x, others)
+        P_e = compute_pressure_elastic(c, x, others)
 
-# Extract elastic stresses/pressure from solutio vector
-#τ_elastic = compute_stress_elastic(c, xnew, others)
-#P_elastic = compute_pressure_elastic(c, xnew, others)
-
-
-
-
-
-
-
-
-# Initial guess for τ
-#=
-N=length(eqs)
-x0 = zeros(N)
-args_all = generate_args_template(eqs,  SVector{N}(x0), others)
-
-eq = eqs[1]
-
-val = 0.0
-for i = 1: length(eq.rheology)
-    keys_hist     = history_kwargs(eq.rheology[i])
-    args_local    = extract_local_kwargs(others, keys_hist, eq.el_number[i])
-    args_combined = merge(args, args_local, vars)
-    fn_c = counterpart(eq.fn)
-    val_local  = fn_c(eq.rheology[i], args_combined)
-    val += inv(τ)
-    #val += val_local
-end
-x0[1]= inv(τ_inv)
-=#
-
-#=
-function estimate_initial_value(eq, others, args, vars)
-
-    if eq.fn == compute_stress || eq.fn == compute_stress_elastic
-        harmonic = true
-    else
-        harmonic = false
+        τ1[i] = τ_e[1]
+        P1[i] = P_e[1]
+        if length(τ_e) > 1
+            τ2[i] = τ_e[2]
+            P2[i] = P_e[2]
+        end
+        t += others.dt
+        t_v[i] = t
     end
 
-    val = 0.0
-    if  eq.fn == compute_stress || eq.fn == compute_strain_rate ||
-        eq.fn == compute_pressure || eq.fn == compute_volumetric_strain_rate
+    return t_v, τ1, τ2, P1, P2
+end
 
-        for i = 1: length(eq.rheology)
-            keys_hist     = history_kwargs(eq.rheology[i])
-            args_local    = extract_local_kwargs(others, keys_hist, eq.el_number[i])
-            args_combined = merge(args, args_local, vars)
-            fn_c = counterpart(eq.fn)
-            val_local  = fn_c(eq.rheology[i], args_combined)
-            if harmonic
-                val += inv(val_local)
-            else
-                val += val_local
-            end
-        end
-        if harmonic
-            val = inv(val)
-        end
 
+# Burgers model, numerics
+t_v, τ1, τ2, P1, P2 = stress_time( vars, others, x; ntime=200, dt=1e9)
+
+
+# Analytical solution for Burgers model
+function simulate_series_Burgers_model(E1, η1, E2, η2, ε̇, t_max, dt)
+    N       = Int(round(t_max / dt)) + 1
+    t       = range(0, step=dt, length=N)
+    σ       = zeros(N)          # Stress
+    ε_KV    = zeros(N)          # Strain in Kelvin–Voigt element
+    σ_KV    = zeros(N) 
+    σ_spring = zeros(N) # Stress in the spring of the Kelvin-Voigt element 
+    for i in 2:N
+        # Previous values
+        ε_KV_prev   = ε_KV[i-1]
+        σ_prev      = σ[i-1]
+        dεKVdt      = (σ_prev - E2 * ε_KV_prev) / η2    # Kelvin–Voigt strain rate
+        ε_KV[i]     = ε_KV_prev + dt * dεKVdt           # Update ε_KV
+        dσdt        = E1 * (ε̇ - σ_prev / η1 - dεKVdt)   # Stress rate from Maxwell element
+        σ[i]        = σ_prev + dt * dσdt                # Update stress
+        σ_KV[i]     = E2 * ε_KV[i] + η2 * dεKVdt        # Calculate σ_KV explicitly at this step
+        # Stress in the spring of the Kelvin-Voigt element (elastic part)
+        σ_spring[i] = E2 * ε_KV[i]
     end
 
-    return val
+    return t, σ, σ_spring
 end
-=#
 
 
 
 
+η1 =  2*c.leafs[1].η
+G1 =  2*c.leafs[2].G
+if length(c.branches) > 0
+    η2 =  2*c.branches[1].leafs[1].η
+    G2 =  2*c.branches[1].leafs[2].G
+else
+    η2 =  0.0
+    G2 =  0.0
+end
+
+t_anal,τ1_anal,τ2_anal  = simulate_series_Burgers_model(E1, η1, E2, η2, vars.ε, t_v[end], (t_v[2]-t_v[1])/10)
+
+SecYear =  3600*24*365.25
+fig     =  Figure(fontsize=30)
+ax      =  Axis(fig[1, 1], title="Burgers model", xlabel="t [kyr]", ylabel=L"\tau [MPa]", xticks=(0:2:20), yticks=(0:5:50))  
+
+scatter!(ax,t_v/SecYear/1e3,τ1/1e6, label="τ1")
+scatter!(ax,t_v/SecYear/1e3,τ2/1e6, label="τ2")
+lines!(ax,t_anal/SecYear/1e3,τ1_anal/1e6, label="τ1 analytical")
+lines!(ax,t_anal/SecYear/1e3,τ2_anal/1e6, label="τ2 analytical")
+
+axislegend(ax, position=:rb)
+#title!(ax,"Burgers model")
+#ax.xlabel = L"t [kyr]"
+#ax.ylabel = L"\tau [Pa]"
+display(fig)
