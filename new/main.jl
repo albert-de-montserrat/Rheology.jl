@@ -164,17 +164,12 @@ c, x, vars, args, others = let
     #         |
     #      viscous
     s1 = SeriesModel(viscous1, viscous2)
-    c = ParallelModel(viscous1, viscous2) |> SeriesModel
+    c = ParallelModel(viscous1, s1) |> SeriesModel
 
     vars = (; ε = 1.0e-15) # input variables (constant)
     args = (; τ = 1.0e2) # guess variables (we solve for these, differentiable)
     others = (;)       # other non-differentiable variables needed to evaluate the state functions
 
-    #x = SA[
-    #    values(vars)..., # local  guess(es)
-    #    values(args)..., # global guess(es), solving for these
-    #]
-    
     x = initial_guess_x(c, vars, args, others)
 
     c, x, vars, args, others
