@@ -16,6 +16,7 @@ end
 @inline _isvolumetric(::BulkElasticity) = true
 @inline _isvolumetric(::BulkViscosity) = true
 @inline _isvolumetric(c::AbstractCompositeModel) = _isvolumetric(c.leafs)
+@inline _isvolumetric(::Tuple{}) = false
 
 function _isvolumetric(c::AbstractCompositeModel)
     b1 = _isvolumetric(c.leafs)
