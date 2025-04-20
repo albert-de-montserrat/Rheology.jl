@@ -118,8 +118,11 @@ end
 end
 
 @inline series_state_functions(c::NTuple{N, ParallelModel}) where {N} = series_state_functions(first(c))..., series_state_functions(Base.tail(c))...
+@inline series_state_functions(c::Tuple{})  = (compute_strain_rate, )
+
 # @inline series_state_functions(c::ParallelModel)                      = flatten_repeated_functions(parallel_state_functions(c.leafs))
 @inline series_state_functions(c::ParallelModel) = flatten_repeated_functions(series_state_functions(c.leafs))
+
 
 # #######################################################################
 # # DEAL FIRST WITH THE SERIES PART

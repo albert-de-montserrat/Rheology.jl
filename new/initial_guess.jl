@@ -47,6 +47,10 @@ estimate_initial_value(eq::CompositeEquation, vars, args, others) = _estimate_in
 @inline _estimate_initial_value(::typeof(compute_stress), eq, vars, args, others) =  _estimate_initial_value_arith(eq.fn, eq.rheology, eq.el_number, vars, args, others)
 @inline _estimate_initial_value(::typeof(compute_pressure), eq, vars, args, others) =  _estimate_initial_value_arith(eq.fn, eq.rheology, eq.el_number, vars, args, others)
 
+
+@inline _estimate_initial_value_harm(fn, rheology::Tuple{}, el_number, vars, args, others) = 1
+@inline _estimate_initial_value_arith(fn, rheology::Tuple{}, el_number, vars, args, others) = 1
+
 @generated function _estimate_initial_value_harm(fn, rheology::NTuple{N,AbstractRheology}, el_number, vars, args, others) where N
 
     return quote
@@ -58,6 +62,7 @@ estimate_initial_value(eq::CompositeEquation, vars, args, others) = _estimate_in
             fn_c = counterpart(fn)
             val_local =fn_c(rheology[i], args_combined)
             inv(val_local)
+            
         end
         
         sum_vals = 0.0
@@ -65,6 +70,9 @@ estimate_initial_value(eq::CompositeEquation, vars, args, others) = _estimate_in
             if !isinf(vals[i])
                 sum_vals += vals[i]
             end
+        end
+        if sum_vals == 0.0
+            sum_vals = 1.0
         end
         inv(sum_vals)
     end

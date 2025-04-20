@@ -351,7 +351,7 @@ c, x, vars, args, others = let
     #             parallel    
     #                |       
     #   viscousbulk --- elasticbulkelastic 
-    c      = ParallelModel(viscousbulk, elasticbulk)
+    c      = SeriesModel(ParallelModel(viscousbulk, elasticbulk))
     vars   = (; θ = 1e-20)       # input variables (constant)
     args   = (; P = 1e6)         # guess variables (we solve for these, differentiable)
     others = (; dt = 1e10)                  # other non-differentiable variables needed to evaluate the state functions
@@ -364,7 +364,7 @@ c, x, vars, args, others = let
 end
 
 
-c, x, vars, args, others = let
+c1, x, vars, args, others = let
     #      elastic - viscous -    parallel    
     #                                |       
     #                   viscousbulk --- elasticbulk
@@ -375,11 +375,11 @@ c, x, vars, args, others = let
     args   = (; τ = 1e3,   P = 1e6)         # guess variables (we solve for these, differentiable)
     others = (; dt = 1e10)                  # other non-differentiable variables needed to evaluate the state functions
 
-    x = initial_guess_x(c, others, args, vars)
-    #x = SA[
-    #    values(args)..., # global guess(es), solving for these
-    #]
-    x = init
+    #x = initial_guess_x(c, others, args, vars)
+    x = SA[
+        values(args)..., # global guess(es), solving for these
+    ]
+    #x = init
 
     c, x, vars, args, others
 end

@@ -365,6 +365,9 @@ Base.@propagate_inbounds @inline _extract_local_kwargs(vals_args::Tuple, name, k
     return evaluate_state_function(fn, rheology, args, others, el_number)
 end
 
+
+@inline evaluate_state_function(fn::F, rheology::Tuple{}, args, others, el_number) where {N, F} = 0
+
 @generated function evaluate_state_function(fn::F, rheology::NTuple{N, AbstractRheology}, args, others, el_number) where {N, F}
     return quote
         @inline
