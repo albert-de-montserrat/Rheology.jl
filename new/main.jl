@@ -509,7 +509,7 @@ else
     G2 =  0.0
 end
 
-t_anal,τ1_anal,τ2_anal  = simulate_series_Burgers_model(E1, η1, E2, η2, vars.ε, t_v[end], (t_v[2]-t_v[1])/10)
+t_anal,τ1_anal,τ2_anal  = simulate_series_Burgers_model(G1, η1, G2, η2, vars.ε, t_v[end], (t_v[2]-t_v[1])/10)
 
 SecYear =  3600*24*365.25
 fig     =  Figure(fontsize=30)
