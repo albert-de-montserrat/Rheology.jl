@@ -406,6 +406,26 @@ c, x, vars, args, others = let
     c, x, vars, args, others
 end
 
+c, x, vars, args, others = let
+    # Linear viscelastoplastic model
+    #      elastic - viscous -    drucker
+
+    viscous3 = LinearViscosity(1.0e21)
+    drucker1 = DruckerPrager(1.0e6, 0.0, 0.0)
+    c = SeriesModel(viscous3, elastic, drucker1)
+    #c = SeriesModel(viscous1, elastic)
+    
+    
+    vars = (; ε = 1.0e-15, θ = 1.0e-20)         # input variables (constant)
+    args = (; τ = 1.0e3, P = 1.0e6)             # guess variables (we solve for these, differentiable)
+    others = (; dt = 1.0e10, τ0 = 1.0, P0=0.0)       # other non-differentiable variables needed to evaluate the state functions
+    
+    
+    x   = initial_guess_x(c, vars, args, others)
+
+    c, x, vars, args, others
+end
+
 
 function main(c, x, vars, args, others)
     ε = exp10.(LinRange(log10(1.0e-15), log10(1.0e-8), 50))
@@ -464,12 +484,12 @@ function stress_time( vars, others, x; ntime=200, dt=1e8)
         t_v[i] = t
     end
 
-    return t_v, τ1, τ2, P1, P2
+    return t_v, τ1, τ2, P1, P2, x
 end
 
 
 # Burgers model, numerics
-t_v, τ1, τ2, P1, P2 = stress_time( vars, others, x; ntime=200, dt=1e9)
+t_v, τ1, τ2, P1, P2, x1 = stress_time( vars, others, x; ntime=200, dt=1e9)
 
 
 # Analytical solution for Burgers model
@@ -513,12 +533,12 @@ t_anal,τ1_anal,τ2_anal  = simulate_series_Burgers_model(G1, η1, G2, η2, vars
 
 SecYear =  3600*24*365.25
 fig     =  Figure(fontsize=30)
-ax      =  Axis(fig[1, 1], title="Burgers model", xlabel="t [kyr]", ylabel=L"\tau [MPa]", xticks=(0:2:20), yticks=(0:5:50))  
+ax      =  Axis(fig[1, 1], title="Burgers model", xlabel="t [kyr]", ylabel=L"\tau [MPa]", xticks=(0:2:20))  
 
 scatter!(ax,t_v/SecYear/1e3,τ1/1e6, label="τ1")
-scatter!(ax,t_v/SecYear/1e3,τ2/1e6, label="τ2")
-lines!(ax,t_anal/SecYear/1e3,τ1_anal/1e6, label="τ1 analytical")
-lines!(ax,t_anal/SecYear/1e3,τ2_anal/1e6, label="τ2 analytical")
+#scatter!(ax,t_v/SecYear/1e3,τ2/1e6, label="τ2")
+#lines!(ax,t_anal/SecYear/1e3,τ1_anal/1e6, label="τ1 analytical")
+#lines!(ax,t_anal/SecYear/1e3,τ2_anal/1e6, label="τ2 analytical")
 
 axislegend(ax, position=:rb)
 #title!(ax,"Burgers model")
