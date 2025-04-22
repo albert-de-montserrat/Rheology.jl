@@ -337,18 +337,20 @@ end
 
 @generated function generate_args_template(eqs::NTuple{N, CompositeEquation}) where {N}
     return quote
-        Base.@ntuple $N i -> differentiable_kwargs(eqs[i].fn)
+        args = Base.@ntuple $N i -> differentiable_kwargs(eqs[i].fn)
     end
 end
 
 @generated function generate_args_template(eqs::NTuple{N, Any}, x::SVector{N}, others::NamedTuple) where {N}
     return quote
         args_template = generate_args_template(eqs)
-        Base.@ntuple $N i -> begin
+        args = Base.@ntuple $N i -> begin
             @inline
             name = keys(args_template[i])
             merge(NamedTuple{name}(x[i]), others)
         end
+        args_merged  =  merge(args...)
+        Base.@ntuple $N i -> args_merged
     end
 end
 
