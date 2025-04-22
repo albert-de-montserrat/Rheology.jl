@@ -313,7 +313,12 @@ function add_local_equation(iparent, ilocal_childs, iself_ref, fns_own_local::F1
     CompositeEquation(iparent, ilocal_childs, iself_ref, fns_own_local, leafs, num, Val(B), el_number)
 end
 
-# exceptions
+## Exceptions
+# lambda has no children or parent equations
+# function add_local_equation(iparent, ilocal_childs, iself_ref, fns_own_local::typeof(compute_lambda), ::F, leafs, num, ::Val{B}, el_number) where {F<:Function, B}
+#     CompositeEquation(0, (), iself_ref, fns_own_local, leafs, num, Val(true), el_number)
+# end
+
 add_local_equation(::Any, ::Any, ::Any, ::typeof(compute_lambda), ::typeof(compute_volumetric_strain_rate), ::Any, ::Any,  ::Val{B}, ::Any) where B = ()
 
 @generated function add_parallel_equations(global_eqs::NTuple{N1, Any}, branches::NTuple{N2, AbstractCompositeModel}, iself_ref, fns_own_global::NTuple{N1, Any}) where {N1, N2}
@@ -440,6 +445,9 @@ end
 # if global, subtract the variables
 @inline subtract_parent(::SVector, eq::CompositeEquation{true}, vars) = vars[eq.ind_input]
 @inline subtract_parent(x::SVector, eq::CompositeEquation{false}, ::NamedTuple) = x[eq.parent]
+# exception for lambda
+@inline subtract_parent(x::SVector, eq::CompositeEquation{false, T, typeof(compute_lambda)}, ::NamedTuple) where {T} = 0# x[eq.self]
+
 @generated function subtract_parent(residual::NTuple{N, Any}, x, eqs::NTuple{N, CompositeEquation}, vars) where {N}
     return quote
         @inline
