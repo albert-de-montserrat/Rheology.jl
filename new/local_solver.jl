@@ -22,7 +22,7 @@ end
 
 Solve the system of equations defined by the composite model `c` using a Newton-Raphson method.
 """
-function solve(c::AbstractCompositeModel, x::SVector, vars, others; tol = 1.0e-9, itermax = 1e4, verbose=true)
+function solve(c::AbstractCompositeModel, x::SVector, vars, others; tol::Float64 = 1.0e-9, itermax = 1e4, verbose::Bool=false)
 
     it = 0
     er = Inf
@@ -44,4 +44,3 @@ function solve(c::AbstractCompositeModel, x::SVector, vars, others; tol = 1.0e-9
     end
     return x
 end
-
